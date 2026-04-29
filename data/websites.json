@@ -62,21 +62,43 @@
     ]
   },
   {
-    "id": "embedsports",
-    "name": "EmbedSports",
+    "id": "streamed-pk",
+    "name": "Streamed.pk",
     "categories": [
       {
         "name": "Cricket",
         "channels": [
           {
-            "id": "willow-sports",
-            "name": "Willow Sports",
-            "color": "from-blue-800 to-cyan-600",
+            "id": "willow-cricket-streamed",
+            "name": "Willow Cricket",
+            "color": "from-green-800 to-emerald-600",
             "servers": [
               {
-                "id": "willow-embed-1",
+                "id": "willow-streamed-1",
                 "name": "Server 1",
+                "url": "https://embedsports.top/embed/admin/admin-willow-cricket/1"
+              },
+              {
+                "id": "willow-streamed-2",
+                "name": "Server 2",
                 "url": "https://embedsports.top/embed/admin/admin-willow-cricket/2"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Football",
+        "channels": [
+          {
+            "id": "tnt-sport-1",
+            "name": "TNT Sport-1",
+            "color": "from-gray-800 to-gray-600",
+            "servers": [
+              {
+                "id": "tnt-sport-1-s1777486826679",
+                "name": "Server-1",
+                "url": "https://embedsports.top/embed/admin/ppv-atl-tico-madrid-vs-arsenal/1"
               }
             ]
           }

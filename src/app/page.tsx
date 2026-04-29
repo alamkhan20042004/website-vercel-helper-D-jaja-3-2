@@ -143,12 +143,19 @@ export default function Home() {
     saveData(newData);
   };
 
+  // Utility to extract URL if the user pastes a full iframe tag
+  const extractUrl = (input: string) => {
+    const match = input.match(/src=["']([^"']+)["']/i);
+    return match ? match[1] : input.trim();
+  };
+
   const addServer = (websiteId: string, categoryName: string, channelId: string) => {
     const name = window.prompt("Enter server name (e.g., Server 4):");
     if (!name) return;
-    const url = window.prompt("Enter iframe source URL (e.g., https://dlstreams...):");
-    if (!url) return;
+    const rawUrl = window.prompt("Enter iframe source URL (e.g., https://dlstreams...):");
+    if (!rawUrl) return;
     
+    const url = extractUrl(rawUrl);
     const serverId = `${channelId}-s${Date.now()}`;
 
     const newData = websitesData.map(ws => {
@@ -179,8 +186,10 @@ export default function Home() {
   const editServer = (websiteId: string, categoryName: string, channelId: string, serverId: string, oldName: string, oldUrl: string) => {
     const newName = window.prompt("Edit server name:", oldName);
     if (!newName) return;
-    const newUrl = window.prompt("Edit iframe source URL:", oldUrl);
-    if (!newUrl) return;
+    const rawUrl = window.prompt("Edit iframe source URL:", oldUrl);
+    if (!rawUrl) return;
+
+    const newUrl = extractUrl(rawUrl);
 
     if (newName === oldName && newUrl === oldUrl) return;
 
@@ -278,7 +287,7 @@ export default function Home() {
                   <h3 className="text-xl font-semibold text-gray-400">
                     {category.name}
                   </h3>
-                  {isEditMode && (
+                  {isEditMode && website.id !== "daddylivehd" && (
                     <div className="flex gap-2">
                       <button onClick={() => addChannel(website.id, category.name)} className="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-white font-medium">+ Add Channel</button>
                       <button onClick={() => editCategory(website.id, category.name)} className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-white font-medium">Edit Sport</button>
@@ -307,7 +316,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {isEditMode && (
+                      {isEditMode && website.id !== "daddylivehd" && (
                         <div className="absolute -top-2 -right-2 flex gap-1 z-10">
                           <button 
                             onClick={() => editChannel(website.id, category.name, channel.id, channel.name)}
@@ -345,7 +354,7 @@ export default function Home() {
                                 </Link>
                               )}
                               
-                              {isEditMode && (
+                              {isEditMode && website.id !== "daddylivehd" && (
                                 <>
                                   <button 
                                     onClick={() => editServer(website.id, category.name, channel.id, server.id, server.name, server.url)}
@@ -366,7 +375,7 @@ export default function Home() {
                             </div>
                           ))}
                           
-                          {isEditMode && (
+                          {isEditMode && website.id !== "daddylivehd" && (
                             <button
                               onClick={() => addServer(website.id, category.name, channel.id)}
                               className="w-full flex items-center justify-center p-3 rounded-lg bg-green-900/30 hover:bg-green-900/50 border border-green-800/50 text-green-400 transition-colors font-medium border-dashed mt-1"
@@ -388,7 +397,7 @@ export default function Home() {
               </div>
             ))}
 
-            {isEditMode && (
+            {isEditMode && website.id !== "daddylivehd" && (
               <button
                 onClick={() => addCategory(website.id)}
                 className="w-full p-4 rounded-xl border-2 border-dashed border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-colors font-bold text-lg"
