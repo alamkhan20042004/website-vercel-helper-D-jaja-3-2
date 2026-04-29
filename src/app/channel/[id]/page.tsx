@@ -7,7 +7,7 @@ export default async function ChannelPage({
 }) {
   const { id } = await params;
 
-  const serverUrl = getServerUrlById(id);
+  const serverUrl = await getServerUrlById(id);
   const streamUrl = serverUrl || `https://example.com/stream/${id}`;
   const title = `Sports Player - ${id}`;
 
