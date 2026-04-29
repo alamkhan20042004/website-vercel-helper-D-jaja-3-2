@@ -1,27 +1,17 @@
-import Link from "next/link";
+"use client";
 
-const categories = [
-  {
-    name: "Cricket Channels",
-    channels: [
-      { id: "willow-sports", name: "Willow Sports", color: "from-blue-900 to-blue-600" },
-      { id: "ten-sports", name: "Ten Sports", color: "from-red-900 to-red-600" },
-      { id: "sky-sports-cricket", name: "Sky Sports Cricket", color: "from-indigo-900 to-indigo-600" },
-      { id: "star-sports-1", name: "Star Sports 1", color: "from-blue-800 to-cyan-600" },
-    ],
-  },
-  {
-    name: "Football Channels",
-    channels: [
-      { id: "sky-sports-football", name: "Sky Sports Football", color: "from-red-800 to-red-500" },
-      { id: "bt-sport-1", name: "BT Sport 1", color: "from-purple-900 to-purple-600" },
-      { id: "beinsports", name: "beIN Sports", color: "from-purple-800 to-pink-600" },
-      { id: "supersport-premier", name: "SuperSport Premier League", color: "from-blue-800 to-indigo-600" },
-    ],
-  },
-];
+import { useState } from "react";
+import Link from "next/link";
+import { websitesData } from "@/lib/data";
 
 export default function Home() {
+  // Track which channel is currently expanded to show servers
+  const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null);
+
+  const toggleChannel = (channelId: string) => {
+    setExpandedChannelId(expandedChannelId === channelId ? null : channelId);
+  };
+
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12 lg:p-24 font-[family-name:var(--font-geist-sans)]">
       <header className="mb-12 text-center md:text-left">
@@ -29,41 +19,83 @@ export default function Home() {
           Live Sports
         </h1>
         <p className="mt-4 text-gray-400 text-lg">
-          Select a channel to start streaming instantly.
+          Select a channel to view available servers.
         </p>
       </header>
 
       <main className="space-y-16">
-        {categories.map((category) => (
-          <section key={category.name}>
-            <h2 className="text-2xl font-bold mb-6 text-gray-300 border-b border-gray-800 pb-2">
-              {category.name}
+        {websitesData.map((website) => (
+          <section key={website.id} className="space-y-8">
+            <h2 className="text-3xl font-bold text-white border-b border-gray-800 pb-4">
+              {website.name}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {category.channels.map((channel) => (
-                <Link
-                  key={channel.id}
-                  href={`/channel/${channel.id}`}
-                  className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${channel.color} p-[1px] group transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-white/10`}
-                >
-                  <div className="h-full w-full bg-black/80 rounded-xl p-6 flex flex-col justify-center items-center text-center gap-4 group-hover:bg-black/60 transition-colors duration-300">
-                    <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-300">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-8 h-8 text-white/80"
+
+            {website.categories.map((category) => (
+              <div key={category.name} className="space-y-4">
+                <h3 className="text-xl font-semibold text-gray-400">
+                  {category.name}
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {category.channels.map((channel) => (
+                    <div key={channel.id} className="flex flex-col gap-2">
+                      {/* Channel Button */}
+                      <button
+                        onClick={() => toggleChannel(channel.id)}
+                        className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${channel.color} p-[1px] group transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-white/10 text-left w-full h-32`}
                       >
-                        <path d="M19.5 3h-15C3.12 3 2 4.12 2 5.5v13C2 19.88 3.12 21 4.5 21h15c1.38 0 2.5-1.12 2.5-2.5v-13C22 4.12 20.88 3 19.5 3zm-9.5 13V8l6 4-6 4z" />
-                      </svg>
+                        <div className="h-full w-full bg-black/80 rounded-xl p-4 flex flex-col justify-center items-center gap-3 group-hover:bg-black/60 transition-colors duration-300">
+                          <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              className="w-6 h-6 text-white/80"
+                            >
+                              <path d="M19.5 3h-15C3.12 3 2 4.12 2 5.5v13C2 19.88 3.12 21 4.5 21h15c1.38 0 2.5-1.12 2.5-2.5v-13C22 4.12 20.88 3 19.5 3zm-9.5 13V8l6 4-6 4z" />
+                            </svg>
+                          </div>
+                          <span className="text-lg font-semibold text-white group-hover:text-white/90 text-center">
+                            {channel.name}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Servers Dropdown / List */}
+                      {expandedChannelId === channel.id && (
+                        <div className="flex flex-col gap-2 mt-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                          {channel.servers.map((server) => (
+                            <Link
+                              key={server.id}
+                              href={`/channel/${server.id}`}
+                              className="flex items-center justify-between p-3 rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-600 transition-all duration-200"
+                            >
+                              <span className="text-gray-300 font-medium">
+                                {server.name}
+                              </span>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={2}
+                                stroke="currentColor"
+                                className="w-5 h-5 text-gray-500"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"
+                                />
+                              </svg>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <h3 className="text-lg font-semibold text-white group-hover:text-white/90">
-                      {channel.name}
-                    </h3>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </section>
         ))}
       </main>

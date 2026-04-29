@@ -1,3 +1,5 @@
+import { getServerUrlById } from "@/lib/data";
+
 export default async function ChannelPage({
   params,
 }: {
@@ -5,16 +7,9 @@ export default async function ChannelPage({
 }) {
   const { id } = await params;
 
-  // Map channel IDs to their respective iframe URLs
-  let streamUrl = "";
-  let title = "Sports Player";
-
-  if (id === "willow-sports") {
-    streamUrl = "https://embedsports.top/embed/admin/admin-willow-cricket/2";
-    title = "Willow Cricket Player";
-  } else {
-    streamUrl = `https://example.com/stream/${id}`;
-  }
+  const serverUrl = getServerUrlById(id);
+  const streamUrl = serverUrl || `https://example.com/stream/${id}`;
+  const title = `Sports Player - ${id}`;
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-black m-0 p-0 fixed inset-0">
@@ -34,4 +29,3 @@ export default async function ChannelPage({
     </div>
   );
 }
-
