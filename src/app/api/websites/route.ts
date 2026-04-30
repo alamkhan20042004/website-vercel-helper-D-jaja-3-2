@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 const dataPath = path.join(process.cwd(), 'data', 'websites.json');
 
 export async function GET() {
