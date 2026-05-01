@@ -114,6 +114,39 @@
                 "id": "tnt-sport-1-s1777486826679",
                 "name": "Server-1",
                 "url": "https://embedsports.top/embed/admin/ppv-atl-tico-madrid-vs-arsenal/1"
+              },
+              {
+                "id": "tnt-sport-1-s1777659087901",
+                "name": "England Premier League-hahah",
+                "url": "https://embedsports.top/embed/admin/ppv-leeds-united-vs-burnley/1"
+              },
+              {
+                "id": "tnt-sport-1-s1777659221184",
+                "name": "laliga",
+                "url": "https://embedsports.top/embed/admin/ppv-girona-vs-mallorca/1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tv247us",
+    "name": "TV247US.vip",
+    "categories": [
+      {
+        "name": "Cricket",
+        "channels": [
+          {
+            "id": "fox-cricket",
+            "name": "Fox Cricket",
+            "color": "from-orange-800 to-orange-600",
+            "servers": [
+              {
+                "id": "tv247us-fox-cricket-1",
+                "name": "Server 1",
+                "url": "https://tv247us.vip/embed/fox-cricket/"
               }
             ]
           }
