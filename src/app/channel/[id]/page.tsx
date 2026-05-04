@@ -7,8 +7,15 @@ export default async function ChannelPage({
 }) {
   const { id } = await params;
 
+  // Database se direct link nikalo (e.g., https://embedsports.top/...)
   const serverUrl = await getServerUrlById(id);
-  const streamUrl = serverUrl || `https://example.com/stream/${id}`;
+  
+  // MAIN FIX: Agar link mil jaye, toh usko directly iframe mein mat dalo!
+  // Usko apne proxy API (/api/stream?url=...) ke zariye bhejo
+  const streamUrl = serverUrl 
+    ? `/api/stream?url=${encodeURIComponent(serverUrl)}` 
+    : `https://example.com/stream/${id}`;
+    
   const title = `Sports Player - ${id}`;
 
   return (
@@ -18,7 +25,7 @@ export default async function ChannelPage({
         marginHeight={0}
         marginWidth={0}
         scrolling="no"
-        src={streamUrl}
+        src={streamUrl} // Ab yeh direct link ke bajaye proxy wala link use karega
         allow="encrypted-media; picture-in-picture;"
         allowFullScreen
         width="100%"
@@ -29,3 +36,54 @@ export default async function ChannelPage({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// import { getServerUrlById } from "@/lib/data";
+
+// export default async function ChannelPage({
+//   params,
+// }: {
+//   params: Promise<{ id: string }>;
+// }) {
+//   const { id } = await params;
+
+//   const serverUrl = await getServerUrlById(id);
+//   const streamUrl = serverUrl || `https://example.com/stream/${id}`;
+//   const title = `Sports Player - ${id}`;
+
+//   return (
+//     <div className="w-screen h-screen overflow-hidden bg-black m-0 p-0 fixed inset-0">
+//       <iframe
+//         title={title}
+//         marginHeight={0}
+//         marginWidth={0}
+//         scrolling="no"
+//         src={streamUrl}
+//         allow="encrypted-media; picture-in-picture;"
+//         allowFullScreen
+//         width="100%"
+//         height="100%"
+//         frameBorder="0"
+//         className="w-full h-full border-none block m-0 p-0 bg-black"
+//       />
+//     </div>
+//   );
+// }
