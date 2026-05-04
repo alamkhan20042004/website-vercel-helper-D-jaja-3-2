@@ -7,15 +7,9 @@ export default async function ChannelPage({
 }) {
   const { id } = await params;
 
-  // Database se direct link nikalo (e.g., https://embedsports.top/...)
+  // Database se direct link nikalein (Proxy ki zaroorat nahi)
   const serverUrl = await getServerUrlById(id);
-  
-  // MAIN FIX: Agar link mil jaye, toh usko directly iframe mein mat dalo!
-  // Usko apne proxy API (/api/stream?url=...) ke zariye bhejo
-  const streamUrl = serverUrl 
-    ? `/api/stream?url=${encodeURIComponent(serverUrl)}` 
-    : `https://example.com/stream/${id}`;
-    
+  const streamUrl = serverUrl || `https://example.com/stream/${id}`;
   const title = `Sports Player - ${id}`;
 
   return (
@@ -25,7 +19,8 @@ export default async function ChannelPage({
         marginHeight={0}
         marginWidth={0}
         scrolling="no"
-        src={streamUrl} // Ab yeh direct link ke bajaye proxy wala link use karega
+        src={streamUrl} // Direct URL lagayen (e.g. https://embedsports.top/...)
+        referrerPolicy="no-referrer" // YEH WOH TRICK HAI JO BLOCK HONE SE BACHAYEGI
         allow="encrypted-media; picture-in-picture;"
         allowFullScreen
         width="100%"
