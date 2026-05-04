@@ -1,13 +1,26 @@
-
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 
 export const dynamic = 'force-dynamic';
 
+// Yeh starter data hai jo khali hone par show hoga
+const starterData = [
+  {
+    id: "site-1",
+    name: "Main Sports Site",
+    categories: [
+      {
+        name: "Sports Categories",
+        channels: []
+      }
+    ]
+  }
+];
+
 export async function GET() {
   try {
-    // Vercel KV se 'websites_data' key read karein. Agar empty ho toh [] return karein.
-    const data = await kv.get('websites_data') || [];
+    // Agar KV database khali hai, toh starterData bhej do
+    const data = await kv.get('websites_data') || starterData;
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error reading websites data from KV:', error);
@@ -18,7 +31,6 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const newData = await request.json();
-    // Naya data Vercel KV database mein save karein
     await kv.set('websites_data', newData);
     return NextResponse.json({ success: true });
   } catch (error) {
