@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -11,7 +10,7 @@ export default function Home() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // New State for custom Add/Edit Server Modal
+  // Updated State to handle Multiple Servers in Modal
   const [serverModal, setServerModal] = useState({
     isOpen: false,
     mode: "add", // 'add' or 'edit'
@@ -19,8 +18,7 @@ export default function Home() {
     categoryName: "",
     channelId: "",
     serverId: "",
-    name: "",
-    url: "",
+    serversList: [{ name: "", url: "" }] // Array to handle multiple inputs
   });
 
   useEffect(() => {
@@ -195,13 +193,12 @@ export default function Home() {
     saveData(newData);
   };
 
-  // Utility to extract URL
   const extractUrl = (input: string) => {
     const match = input.match(/src=["']([^"']+)["']/i);
     return match ? match[1] : input.trim();
   };
 
-  // --- NEW MODAL LOGIC FOR SERVERS ---
+  // --- MULTIPLE SERVERS MODAL LOGIC ---
 
   const openAddServerModal = (websiteId: string, categoryName: string, channelId: string) => {
     setServerModal({
@@ -211,8 +208,7 @@ export default function Home() {
       categoryName,
       channelId,
       serverId: "",
-      name: "",
-      url: "",
+      serversList: [{ name: "", url: "" }], // Start with 1 empty row
     });
   };
 
@@ -224,19 +220,39 @@ export default function Home() {
       categoryName,
       channelId,
       serverId,
-      name: oldName,
-      url: oldUrl,
+      serversList: [{ name: oldName, url: oldUrl }], // Edit only handles 1 item
     });
   };
 
+  // Handle Input Changes in Modal
+  const handleModalInputChange = (index: number, field: "name" | "url", value: string) => {
+    const newList = [...serverModal.serversList];
+    newList[index][field] = value;
+    setServerModal({ ...serverModal, serversList: newList });
+  };
+
+  // Add a new row in Add Modal
+  const addModalRow = () => {
+    setServerModal({
+      ...serverModal,
+      serversList: [...serverModal.serversList, { name: "", url: "" }]
+    });
+  };
+
+  // Remove a row in Add Modal
+  const removeModalRow = (index: number) => {
+    const newList = serverModal.serversList.filter((_, i) => i !== index);
+    setServerModal({ ...serverModal, serversList: newList });
+  };
+
   const handleServerModalSubmit = () => {
-    if (!serverModal.name.trim() || !serverModal.url.trim()) {
-      alert("Please fill both fields!");
+    // Filter out rows that are completely empty
+    const validServers = serverModal.serversList.filter(s => s.name.trim() && s.url.trim());
+
+    if (validServers.length === 0) {
+      alert("Please fill at least one server completely!");
       return;
     }
-
-    const finalUrl = extractUrl(serverModal.url);
-    const serverId = serverModal.mode === "add" ? `${serverModal.channelId}-s${Date.now()}` : serverModal.serverId;
 
     const newData = websitesData.map(ws => {
       if (ws.id === serverModal.websiteId) {
@@ -248,12 +264,28 @@ export default function Home() {
                 ...c,
                 channels: c.channels.map(ch => {
                   if (ch.id === serverModal.channelId) {
+                    
                     if (serverModal.mode === "add") {
-                      return { ...ch, servers: [...ch.servers, { id: serverId, name: serverModal.name, url: finalUrl }] };
-                    } else {
+                      // Map all valid items into final server objects
+                      // Added an index to Date.now() to ensure IDs remain unique if mapped in milliseconds
+                      const newServers = validServers.map((s, idx) => ({
+                        id: `${serverModal.channelId}-s${Date.now()}-${idx}`,
+                        name: s.name,
+                        url: extractUrl(s.url)
+                      }));
+                      return { ...ch, servers: [...ch.servers, ...newServers] };
+                    } 
+                    
+                    else {
+                      // Edit mode (Only 1 item is ever in the array during edit)
+                      const editedServer = validServers[0];
                       return {
                         ...ch,
-                        servers: ch.servers.map(s => s.id === serverId ? { ...s, name: serverModal.name, url: finalUrl } : s)
+                        servers: ch.servers.map(s => 
+                          s.id === serverModal.serverId 
+                            ? { ...s, name: editedServer.name, url: extractUrl(editedServer.url) } 
+                            : s
+                        )
                       };
                     }
                   }
@@ -269,7 +301,7 @@ export default function Home() {
     });
 
     saveData(newData);
-    setServerModal({ ...serverModal, isOpen: false }); // Close modal after saving
+    setServerModal({ ...serverModal, isOpen: false });
   };
 
   const deleteServer = (websiteId: string, categoryName: string, channelId: string, serverId: string) => {
@@ -307,7 +339,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12 lg:p-24 font-[family-name:var(--font-geist-sans)] relative">
       
-      {/* HEADER & MAIN CONTENT (Same as before) */}
+      {/* HEADER */}
       <header className="mb-12 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
         <div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-200 to-gray-500">
@@ -327,6 +359,7 @@ export default function Home() {
         </button>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="space-y-16">
         {websitesData.map((website) => (
           <section key={website.id} className="space-y-8">
@@ -439,13 +472,12 @@ export default function Home() {
                             </div>
                           ))}
                           
-                          {/* CHANGED TO OPEN MODAL INSTEAD OF PROMPTS */}
                           {isEditMode && (
                             <button
                               onClick={() => openAddServerModal(website.id, category.name, channel.id)}
                               className="w-full flex items-center justify-center p-3 rounded-lg bg-green-900/30 hover:bg-green-900/50 border border-green-800/50 text-green-400 transition-colors font-medium border-dashed mt-1"
                             >
-                              + Add Server
+                              + Add Server(s)
                             </button>
                           )}
                         </div>
@@ -474,53 +506,84 @@ export default function Home() {
         ))}
       </main>
 
-      {/* --- ADD/EDIT SERVER MODAL UI --- */}
+      {/* --- ADD/EDIT SERVER MODAL UI (Now supports multiple rows) --- */}
       {serverModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-2xl font-bold text-white mb-6">
-              {serverModal.mode === "add" ? "Add New Server" : "Edit Server"}
+          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            
+            <h3 className="text-2xl font-bold text-white mb-6 shrink-0">
+              {serverModal.mode === "add" ? "Add New Server(s)" : "Edit Server"}
             </h3>
             
-            {/* Side-by-Side Inputs */}
-            <div className="flex flex-col md:flex-row gap-4 mb-8">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-400 mb-2">Server Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g., Server 1"
-                  value={serverModal.name}
-                  onChange={(e) => setServerModal({ ...serverModal, name: e.target.value })}
-                  className="w-full bg-gray-800 text-white p-3 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                  autoFocus
-                />
+            {/* Scrollable area for inputs */}
+            <div className="overflow-y-auto pr-2 pb-4 space-y-4 flex-1">
+              {serverModal.serversList.map((serverInput, index) => (
+                <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 relative">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Server Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Server 1"
+                      value={serverInput.name}
+                      onChange={(e) => handleModalInputChange(index, "name", e.target.value)}
+                      className="w-full bg-gray-800 text-white p-2.5 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                      autoFocus={index === 0}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">Iframe/Link URL</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., https://..."
+                      value={serverInput.url}
+                      onChange={(e) => handleModalInputChange(index, "url", e.target.value)}
+                      className="w-full bg-gray-800 text-white p-2.5 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  
+                  {/* Delete Row Button (Only in Add Mode if there's more than 1 row) */}
+                  {serverModal.mode === "add" && serverModal.serversList.length > 1 && (
+                    <button 
+                      onClick={() => removeModalRow(index)}
+                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-500 shadow-md transition-colors"
+                      title="Remove Row"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-6 mt-4 border-t border-gray-800 flex justify-between shrink-0">
+              <div>
+                {serverModal.mode === "add" && (
+                  <button 
+                    onClick={addModalRow}
+                    className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-gray-300 font-medium transition-colors flex items-center text-sm"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 mr-1"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    Add Another Server
+                  </button>
+                )}
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-400 mb-2">Iframe/Link URL</label>
-                <input
-                  type="text"
-                  placeholder="e.g., https://..."
-                  value={serverModal.url}
-                  onChange={(e) => setServerModal({ ...serverModal, url: e.target.value })}
-                  className="w-full bg-gray-800 text-white p-3 rounded-lg border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                />
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setServerModal({ ...serverModal, isOpen: false })} 
+                  className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleServerModalSubmit} 
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors shadow-lg shadow-blue-900/50"
+                >
+                  Save {serverModal.mode === "add" ? "All" : ""}
+                </button>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setServerModal({ ...serverModal, isOpen: false })} 
-                className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleServerModalSubmit} 
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors"
-              >
-                Save
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -528,7 +591,6 @@ export default function Home() {
     </div>
   );
 }
-
 
 
 
