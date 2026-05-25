@@ -70,6 +70,19 @@ export default function Home() {
     });
   };
 
+  // --- NAYA FUNCTION: Date/Time Format Theek Karne Ke Liye ---
+  const formatDateTimeForCSV = (dateTimeStr: string) => {
+    if (!dateTimeStr || !dateTimeStr.includes('T')) return dateTimeStr;
+    const [datePart, timePart] = dateTimeStr.split('T');
+    let [hours, minutes] = timePart.split(':');
+    let h = parseInt(hours, 10);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12; // '0' baje ko '12' mein convert karne k liye
+    const formattedHours = h < 10 ? '0' + h : h.toString();
+    return `${datePart} ${formattedHours}:${minutes} ${ampm}`;
+  };
+
   const handleCopyCSV = () => {
     if (!csvModal.channel) return;
 
@@ -86,7 +99,11 @@ export default function Home() {
       } else {
         channelNum = `${csvModal.baseChannel}.${index + 1}`;
       }
-      const finalStartTime = server.startTime || globalSTime;
+      
+      // Yahan format function call ho raha hai taake "T" na aaye aur AM/PM set ho
+      const rawTimeToUse = server.startTime || globalSTime;
+      const finalStartTime = formatDateTimeForCSV(rawTimeToUse);
+
       csvData += `${baseUrl}/channel/${server.id},${channelNum},110KBps (Balanced 480p),None,${finalStartTime},${dur}\n`;
     });
 
@@ -378,7 +395,8 @@ export default function Home() {
                               {isEditMode ? (
                                 <div className="flex-1 flex flex-col p-3 rounded-lg bg-gray-900 border border-gray-700 opacity-80">
                                   <span className="text-gray-400 font-medium truncate" title={server.url}>{server.name}</span>
-                                  {server.startTime && <span className="text-xs text-blue-400 mt-1">🕒 {new Date(server.startTime).toLocaleString()}</span>}
+                                  {/* Yahan frontend pr bhi AM/PM dikhane k lye format use kiya gaya hai */}
+                                  {server.startTime && <span className="text-xs text-blue-400 mt-1">🕒 {formatDateTimeForCSV(server.startTime)}</span>}
                                 </div>
                               ) : (
                                 <Link href={`/channel/${server.id}`} className="flex-1 flex flex-col p-3 rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-600 transition-all duration-200">
@@ -386,7 +404,7 @@ export default function Home() {
                                     <span className="text-gray-300 font-medium">{server.name}</span>
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-500"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>
                                   </div>
-                                  {server.startTime && <span className="text-xs text-blue-400 mt-1">🕒 {new Date(server.startTime).toLocaleString()}</span>}
+                                  {server.startTime && <span className="text-xs text-blue-400 mt-1">🕒 {formatDateTimeForCSV(server.startTime)}</span>}
                                 </Link>
                               )}
                               
@@ -469,7 +487,7 @@ export default function Home() {
                   value={csvModal.startTime}
                   onChange={(e) => setCsvModal({...csvModal, startTime: e.target.value})}
                   className="w-full bg-gray-950 text-white p-3 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-                  placeholder="Agar server mein time nahi to yeh use hoga"
+                  placeholder="e.g., 2026-05-25 10:30 AM"
                 />
               </div>
               <div>
@@ -479,7 +497,7 @@ export default function Home() {
                   value={csvModal.duration}
                   onChange={(e) => setCsvModal({...csvModal, duration: e.target.value})}
                   className="w-full bg-gray-950 text-white p-3 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-                  placeholder="e.g., 4h 30m"
+                  placeholder="e.g., 4h"
                 />
               </div>
             </div>
@@ -499,10 +517,8 @@ export default function Home() {
       {serverModal.isOpen && (
         <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           
-          {/* Main Full-Screen Container */}
           <div className="flex-1 w-full h-full max-w-7xl mx-auto flex flex-col p-4 md:p-8">
             
-            {/* Header */}
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-800 pb-4">
               <h3 className="text-3xl font-bold text-white">
                 {serverModal.mode === "add" ? "Add New Server(s)" : "Edit Server"}
@@ -516,14 +532,12 @@ export default function Home() {
                   </button>
                 )}
                 
-                {/* Top Close Button for quick exit */}
                 <button onClick={() => setServerModal({ ...serverModal, isOpen: false })} className="text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 p-2 rounded-lg border border-gray-800 transition-colors">
                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                 </button>
               </div>
             </div>
 
-            {/* Master Time Controller & Bulk Import Options */}
             <div className="shrink-0 mb-6 flex flex-col gap-4">
               <div className="bg-blue-900/10 p-5 rounded-2xl border border-blue-900/30 flex flex-col md:flex-row gap-6 items-start">
                 <div className="w-full md:w-1/3">
@@ -594,7 +608,6 @@ export default function Home() {
               )}
             </div>
             
-            {/* Scrollable Server List Area */}
             <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-6 space-y-4 custom-scrollbar">
               {serverModal.serversList.map((serverInput, index) => (
                 <div key={index} className="flex flex-col md:flex-row gap-6 bg-gray-900 p-5 rounded-2xl border border-gray-800 relative group items-start hover:border-gray-700 transition-colors">
@@ -645,7 +658,6 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Fixed Footer with Actions */}
             <div className="pt-6 mt-2 border-t border-gray-800 flex justify-between items-center shrink-0 bg-[#0a0a0a]">
               <div>
                 {serverModal.mode === "add" && (
