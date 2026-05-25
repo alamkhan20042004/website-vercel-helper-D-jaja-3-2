@@ -498,7 +498,8 @@ export default function Home() {
       {/* ADD/EDIT SERVER MODAL */}
       {serverModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-6xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+          {/* NAYA: overflow-hidden lagaya taakey footer bahar na nikle */}
+          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-6xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col overflow-hidden">
             
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-800 pb-4">
               <h3 className="text-2xl font-bold text-white">
@@ -529,32 +530,41 @@ export default function Home() {
               
               <div className="w-full md:w-2/3 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
                 <p className="text-xs text-gray-400 mb-3 font-medium">Select servers below to apply this master time:</p>
-                <div className="flex flex-wrap gap-2">
-                  {serverModal.serversList.map((serverInput, index) => (
-                    <label 
-                      key={index} 
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
-                        serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== "" 
-                          ? "bg-blue-900/40 border-blue-500/50" 
-                          : "bg-gray-800 border-gray-700 hover:bg-gray-700"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== ""}
-                        onChange={(e) => {
-                          if (!serverModal.bulkTime) {
-                            alert("Please set Master Time first!");
-                            return;
-                          }
-                          const newTime = e.target.checked ? serverModal.bulkTime : "";
-                          handleModalInputChange(index, "startTime", newTime);
-                        }}
-                        className="w-4 h-4 accent-blue-600 cursor-pointer"
-                      />
-                      <span className="text-xs font-bold text-gray-300">Server #{index + 1}</span>
-                    </label>
-                  ))}
+                <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[80px] pr-2">
+                  {serverModal.serversList.map((serverInput, index) => {
+                    const hasTime = serverInput.startTime && serverInput.startTime !== "";
+                    const isSelectedWithBulk = serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== "";
+                    
+                    // NAYA: Green styling logic add ki hai
+                    let labelClasses = "bg-gray-800 border-gray-700 hover:bg-gray-700";
+                    if (isSelectedWithBulk) {
+                      labelClasses = "bg-blue-900/40 border-blue-500/50";
+                    } else if (hasTime) {
+                      labelClasses = "bg-green-900/30 border-green-500/50";
+                    }
+
+                    return (
+                      <label 
+                        key={index} 
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all border ${labelClasses}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelectedWithBulk}
+                          onChange={(e) => {
+                            if (!serverModal.bulkTime) {
+                              alert("Please set Master Time first!");
+                              return;
+                            }
+                            const newTime = e.target.checked ? serverModal.bulkTime : "";
+                            handleModalInputChange(index, "startTime", newTime);
+                          }}
+                          className="w-4 h-4 accent-blue-600 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-gray-300">Server #{index + 1}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -574,11 +584,11 @@ export default function Home() {
               </div>
             )}
             
-            <div className="overflow-y-auto pr-2 pb-4 space-y-4 flex-1">
+            {/* NAYA: min-h-0 lagaya flex-1 k sath taakey container apna size theek calculate karey */}
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-2 space-y-4">
               {serverModal.serversList.map((serverInput, index) => (
                 <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 relative group items-start">
                   
-                  {/* Clean UI: Checkbox removed from here and moved to the top panel */}
                   <div className="flex-1 w-full">
                     <label className="block text-xs font-medium text-gray-400 mb-1">
                       <span className="text-blue-400 font-bold mr-1">#{index + 1}</span> Server Name
@@ -625,7 +635,8 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="pt-6 mt-4 border-t border-gray-800 flex justify-between items-center shrink-0">
+            {/* Yeh footer shrink-0 rakha hai taakey bottom pe fixed rahay */}
+            <div className="pt-4 mt-2 border-t border-gray-800 flex justify-between items-center shrink-0">
               <div>
                 {serverModal.mode === "add" && (
                   <button onClick={addModalRow} className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-gray-300 font-medium transition-colors flex items-center text-sm">
