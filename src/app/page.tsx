@@ -10,7 +10,7 @@ export default function Home() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal State ab Bulk Text ko bhi handle karegi
+  // Add/Edit Server Modal
   const [serverModal, setServerModal] = useState({
     isOpen: false,
     mode: "add",
@@ -23,14 +23,15 @@ export default function Home() {
     bulkText: ""
   });
 
-  // CSV Copy karne ke liye Smart Modal State
+  // 🚀 UPGRADED: CSV Copy Modal State
   const [csvModal, setCsvModal] = useState({
     isOpen: false,
     channel: null as Channel | null,
     baseChannel: "1",
     includeBase: true,
-    startTime: "",
-    duration: ""
+    globalStartTime: "", // Bulk apply ke liye
+    globalDuration: "",  // Bulk apply ke liye
+    serverConfigs: [] as { id: string; startTime: string; duration: string }[] // Har server ka apna data
   });
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function Home() {
     setExpandedChannelId(expandedChannelId === channelId ? null : channelId);
   };
 
+  // --- CSV Modal Logic ---
   const openCsvModal = (channel: Channel) => {
     if (channel.servers.length === 0) {
       alert("No servers available to copy!");
@@ -66,9 +68,49 @@ export default function Home() {
       channel: channel,
       baseChannel: "1",
       includeBase: true,
-      startTime: "",
-      duration: ""
+      globalStartTime: "",
+      globalDuration: "",
+      // Modal open hote hi saare servers ki list bana lo
+      serverConfigs: channel.servers.map(s => ({ id: s.id, startTime: "", duration: "" }))
     });
+  };
+
+  const handleServerConfigChange = (id: string, field: "startTime" | "duration", value: string) => {
+    setCsvModal(prev => ({
+      ...prev,
+      serverConfigs: prev.serverConfigs.map(c => c.id === id ? { ...c, [field]: value } : c)
+    }));
+  };
+
+  const applyGlobalSettings = () => {
+    setCsvModal(prev => ({
+      ...prev,
+      serverConfigs: prev.serverConfigs.map(c => ({
+        ...c,
+        startTime: prev.globalStartTime || c.startTime,
+        duration: prev.globalDuration || c.duration
+      }))
+    }));
+  };
+
+  // 📅 Calendar value (YYYY-MM-DDTHH:mm) ko backend format (YYYY-MM-DD hh:mm AM/PM) mein convert karna
+  const formatForBackend = (dtLocal: string) => {
+    if (!dtLocal) return "None";
+    const dateObj = new Date(dtLocal);
+    if (isNaN(dateObj.getTime())) return "None";
+    
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    let hours = dateObj.getHours();
+    const mins = String(dateObj.getMinutes()).padStart(2, '0');
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 baje ko 12 banana
+    
+    const strTime = `${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    return `${yyyy}-${mm}-${dd} ${strTime}`;
   };
 
   const handleCopyCSV = () => {
@@ -76,9 +118,6 @@ export default function Home() {
 
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     let csvData = "TargetURL,Channel,Quality,Server,StartTime,Duration\n";
-    
-    const sTime = csvModal.startTime.trim() || "None";
-    const dur = csvModal.duration.trim() || "None";
 
     csvModal.channel.servers.forEach((server, index) => {
       let channelNum;
@@ -87,6 +126,11 @@ export default function Home() {
       } else {
         channelNum = `${csvModal.baseChannel}.${index + 1}`;
       }
+      
+      const config = csvModal.serverConfigs.find(c => c.id === server.id);
+      const sTime = config?.startTime ? formatForBackend(config.startTime) : "None";
+      const dur = config?.duration?.trim() || "None";
+
       csvData += `${baseUrl}/channel/${server.id},${channelNum},110KBps (Balanced 480p),None,${sTime},${dur}\n`;
     });
 
@@ -216,7 +260,6 @@ export default function Home() {
     }
 
     const currentValid = serverModal.serversList.filter(s => s.name.trim() || s.url.trim());
-    
     const startIndex = currentValid.length;
     const newRows = extractedUrls.map((url, index) => ({
       name: `Server ${startIndex + index + 1}`,
@@ -285,21 +328,18 @@ export default function Home() {
     saveData(newData);
   };
 
-  // 🚀 NAYA: Ek saath saaray servers delete karne ka function
   const deleteAllServers = (websiteId: string, categoryName: string, channelId: string) => {
     if (!window.confirm("⚠️ WARNING: Kya aap waqayi is channel ke SAARE SERVERS delete karna chahte hain? Yeh wapas nahi aayenge!")) return;
-    
     const newData = websitesData.map(ws => ws.id === websiteId ? { 
       ...ws, 
       categories: ws.categories.map(c => c.name === categoryName ? { 
         ...c, 
         channels: c.channels.map(ch => ch.id === channelId ? { 
           ...ch, 
-          servers: [] // 👈 Yahan humne servers array ko bilkul khali kar diya
+          servers: [] 
         } : ch) 
       } : c) 
     } : ws);
-    
     saveData(newData);
   };
 
@@ -403,7 +443,6 @@ export default function Home() {
                             </div>
                           ))}
                           
-                          {/* 🚀 NAYA: Edit Mode mein Add aur Delete All ke Buttons */}
                           {isEditMode && (
                             <div className="flex flex-col gap-2 mt-1">
                               <button onClick={() => openAddServerModal(website.id, category.name, channel.id)} className="w-full flex items-center justify-center p-3 rounded-lg bg-green-900/30 hover:bg-green-900/50 border border-green-800/50 text-green-400 transition-colors font-medium border-dashed">
@@ -444,11 +483,11 @@ export default function Home() {
       {/* --- CSV EXPORT MODAL UI --- */}
       {csvModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-2xl font-bold text-white mb-6 border-b border-gray-800 pb-4">Export to CSV</h3>
+          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-4xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <h3 className="text-2xl font-bold text-white mb-4 border-b border-gray-800 pb-4 shrink-0">Export to CSV</h3>
             
-            <div className="space-y-4">
-              <div>
+            <div className="flex flex-col md:flex-row gap-4 shrink-0 mb-6">
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-400 mb-1">Base Channel No.</label>
                 <input
                   type="text"
@@ -458,36 +497,80 @@ export default function Home() {
                   placeholder="e.g., 1 or s1"
                 />
               </div>
-
-              <div className="flex items-center gap-3 bg-gray-950 p-3 rounded-lg border border-gray-700 cursor-pointer" onClick={() => setCsvModal({...csvModal, includeBase: !csvModal.includeBase})}>
-                <input type="checkbox" checked={csvModal.includeBase} readOnly className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
-                <span className="text-sm text-gray-300">Include Base (e.g., 1, 1.1, 1.2 instead of 1.1, 1.2)</span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Start Time (Optional)</label>
-                <input
-                  type="text"
-                  value={csvModal.startTime}
-                  onChange={(e) => setCsvModal({...csvModal, startTime: e.target.value})}
-                  className="w-full bg-gray-950 text-white p-3 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-                  placeholder="e.g., 2026-05-25 08:00 PM"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Duration (Optional)</label>
-                <input
-                  type="text"
-                  value={csvModal.duration}
-                  onChange={(e) => setCsvModal({...csvModal, duration: e.target.value})}
-                  className="w-full bg-gray-950 text-white p-3 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-                  placeholder="e.g., 4h 30m"
-                />
+              <div className="flex-1 flex items-end">
+                <div className="w-full flex items-center gap-3 bg-gray-950 p-3.5 rounded-lg border border-gray-700 cursor-pointer" onClick={() => setCsvModal({...csvModal, includeBase: !csvModal.includeBase})}>
+                  <input type="checkbox" checked={csvModal.includeBase} readOnly className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
+                  <span className="text-sm text-gray-300">Include Base (e.g., 1, 1.1, 1.2 instead of 1.1, 1.2)</span>
+                </div>
               </div>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-gray-800 flex justify-end gap-3">
+            {/* 🚀 SMART BULK APPLY SECTION */}
+            <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 mb-6 shrink-0">
+              <h4 className="text-sm font-semibold text-gray-300 mb-3">Apply Time to All Servers (Optional)</h4>
+              <div className="flex flex-col md:flex-row gap-3 items-end">
+                <div className="flex-1 w-full">
+                  <label className="block text-xs text-gray-400 mb-1">Start Time (Calendar)</label>
+                  <input 
+                    type="datetime-local" 
+                    value={csvModal.globalStartTime} 
+                    onChange={(e) => setCsvModal({...csvModal, globalStartTime: e.target.value})} 
+                    className="w-full bg-gray-950 text-white p-2.5 rounded-lg border border-gray-700 focus:border-blue-500 outline-none" 
+                  />
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="block text-xs text-gray-400 mb-1">Duration</label>
+                  <input 
+                    type="text" 
+                    value={csvModal.globalDuration} 
+                    onChange={(e) => setCsvModal({...csvModal, globalDuration: e.target.value})} 
+                    className="w-full bg-gray-950 text-white p-2.5 rounded-lg border border-gray-700 focus:border-blue-500 outline-none" 
+                    placeholder="e.g. 4h 30m" 
+                  />
+                </div>
+                <button 
+                  onClick={applyGlobalSettings} 
+                  className="bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 rounded-lg font-medium text-white transition-colors w-full md:w-auto"
+                >
+                  Apply to All
+                </button>
+              </div>
+            </div>
+
+            {/* 🚀 INDIVIDUAL SERVER LIST (Scrollable) */}
+            <h4 className="text-sm font-semibold text-gray-400 mb-2 shrink-0">Individual Server Settings</h4>
+            <div className="overflow-y-auto pr-2 pb-2 space-y-3 flex-1 min-h-[200px]">
+              {csvModal.channel?.servers.map((server) => {
+                const config = csvModal.serverConfigs.find(c => c.id === server.id) || { id: server.id, startTime: "", duration: "" };
+                return (
+                  <div key={server.id} className="flex flex-col md:flex-row gap-3 items-center bg-gray-900 p-3 rounded-lg border border-gray-800">
+                    <div className="w-full md:w-1/3 font-medium text-gray-300 truncate" title={server.name}>
+                      {server.name}
+                    </div>
+                    <div className="w-full md:w-1/3">
+                      <input 
+                        type="datetime-local" 
+                        value={config.startTime} 
+                        onChange={(e) => handleServerConfigChange(server.id, "startTime", e.target.value)} 
+                        className="w-full bg-gray-950 text-gray-300 p-2.5 rounded-lg border border-gray-700 text-sm focus:border-blue-500 outline-none" 
+                        title="Start Time"
+                      />
+                    </div>
+                    <div className="w-full md:w-1/3">
+                      <input 
+                        type="text" 
+                        placeholder="Duration (e.g. 4h)" 
+                        value={config.duration} 
+                        onChange={(e) => handleServerConfigChange(server.id, "duration", e.target.value)} 
+                        className="w-full bg-gray-950 text-gray-300 p-2.5 rounded-lg border border-gray-700 text-sm focus:border-blue-500 outline-none" 
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-6 mt-4 border-t border-gray-800 flex justify-end gap-3 shrink-0">
               <button onClick={() => setCsvModal({ ...csvModal, isOpen: false })} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors">
                 Cancel
               </button>
@@ -604,6 +687,9 @@ export default function Home() {
     </div>
   );
 }
+
+
+
 
 
 
