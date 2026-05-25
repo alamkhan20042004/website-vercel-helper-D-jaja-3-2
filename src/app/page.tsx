@@ -4,16 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Website, Category, Channel, Server } from "@/lib/data";
 
-// Note: Agar aapke @/lib/data mein Server type mein startTime nahi hai, 
-// toh usko update kar lijiye: startTime?: string;
-
 export default function Home() {
   const [websitesData, setWebsitesData] = useState<Website[]>([]);
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal State mein bulkText aur startTime add kar diya hai
+  // Modal State mein bulkTime add kar diya hai
   const [serverModal, setServerModal] = useState({
     isOpen: false,
     mode: "add",
@@ -21,9 +18,10 @@ export default function Home() {
     categoryName: "",
     channelId: "",
     serverId: "",
-    serversList: [{ name: "", url: "", startTime: "" }], // <-- Added startTime here
+    serversList: [{ name: "", url: "", startTime: "" }],
     showBulk: false,
-    bulkText: ""
+    bulkText: "",
+    bulkTime: "" // <-- NAYA: Master time controller state
   });
 
   const [csvModal, setCsvModal] = useState({
@@ -89,10 +87,7 @@ export default function Home() {
       } else {
         channelNum = `${csvModal.baseChannel}.${index + 1}`;
       }
-      
-      // Agar server ka apna startTime hai toh wo use karo, warna modal wala global time use karo
       const finalStartTime = server.startTime || globalSTime;
-
       csvData += `${baseUrl}/channel/${server.id},${channelNum},110KBps (Balanced 480p),None,${finalStartTime},${dur}\n`;
     });
 
@@ -107,7 +102,6 @@ export default function Home() {
       });
   };
 
-  // --- CRUD Functions for Category & Channel ---
   const addCategory = (websiteId: string) => {
     const name = window.prompt("Enter new category name (e.g., Baseball):");
     if (!name) return;
@@ -155,7 +149,6 @@ export default function Home() {
     return match ? match[1] : input.trim();
   };
 
-  // --- MULTIPLE SERVERS MODAL LOGIC ---
   const openAddServerModal = (websiteId: string, categoryName: string, channelId: string) => {
     setServerModal({
       isOpen: true,
@@ -164,9 +157,10 @@ export default function Home() {
       categoryName,
       channelId,
       serverId: "",
-      serversList: [{ name: "", url: "", startTime: "" }], // <-- Reset with startTime
+      serversList: [{ name: "", url: "", startTime: "" }],
       showBulk: false,
-      bulkText: ""
+      bulkText: "",
+      bulkTime: "" // Reset
     });
   };
 
@@ -178,9 +172,10 @@ export default function Home() {
       categoryName,
       channelId,
       serverId,
-      serversList: [{ name: oldName, url: oldUrl, startTime: oldStartTime || "" }], // <-- Edit mode supports startTime
+      serversList: [{ name: oldName, url: oldUrl, startTime: oldStartTime || "" }],
       showBulk: false,
-      bulkText: ""
+      bulkText: "",
+      bulkTime: "" // Reset
     });
   };
 
@@ -227,7 +222,7 @@ export default function Home() {
     const newRows = extractedUrls.map((url, index) => ({
       name: `Server ${startIndex + index + 1}`,
       url: url,
-      startTime: "" // Bulk import defaults to empty time
+      startTime: serverModal.bulkTime || "" // Agar upar time set hai to import ke waqt hi apply ho jayega
     }));
 
     setServerModal({
@@ -261,7 +256,7 @@ export default function Home() {
                         id: `${serverModal.channelId}-s${Date.now()}-${idx}`,
                         name: s.name,
                         url: extractUrl(s.url),
-                        startTime: s.startTime // <-- Save the start time
+                        startTime: s.startTime
                       }));
                       return { ...ch, servers: [...ch.servers, ...newServers] };
                     } else {
@@ -295,18 +290,13 @@ export default function Home() {
 
   const deleteAllServers = (websiteId: string, categoryName: string, channelId: string) => {
     if (!window.confirm("⚠️ WARNING: Kya aap waqayi is channel ke SAARE SERVERS delete karna chahte hain? Yeh wapas nahi aayenge!")) return;
-    
     const newData = websitesData.map(ws => ws.id === websiteId ? { 
       ...ws, 
       categories: ws.categories.map(c => c.name === categoryName ? { 
         ...c, 
-        channels: c.channels.map(ch => ch.id === channelId ? { 
-          ...ch, 
-          servers: [] 
-        } : ch) 
+        channels: c.channels.map(ch => ch.id === channelId ? { ...ch, servers: [] } : ch) 
       } : c) 
     } : ws);
-    
     saveData(newData);
   };
 
@@ -389,7 +379,6 @@ export default function Home() {
                               {isEditMode ? (
                                 <div className="flex-1 flex flex-col p-3 rounded-lg bg-gray-900 border border-gray-700 opacity-80">
                                   <span className="text-gray-400 font-medium truncate" title={server.url}>{server.name}</span>
-                                  {/* Yahan time show karwa diya */}
                                   {server.startTime && <span className="text-xs text-blue-400 mt-1">🕒 {new Date(server.startTime).toLocaleString()}</span>}
                                 </div>
                               ) : (
@@ -453,10 +442,9 @@ export default function Home() {
         ))}
       </main>
 
-      {/* --- CSV EXPORT MODAL UI --- */}
+      {/* CSV EXPORT MODAL */}
       {csvModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          {/* ... (CSV Modal UI code remains unchanged) ... */}
           <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
             <h3 className="text-2xl font-bold text-white mb-6 border-b border-gray-800 pb-4">Export to CSV</h3>
             
@@ -471,12 +459,10 @@ export default function Home() {
                   placeholder="e.g., 1 or s1"
                 />
               </div>
-
               <div className="flex items-center gap-3 bg-gray-950 p-3 rounded-lg border border-gray-700 cursor-pointer" onClick={() => setCsvModal({...csvModal, includeBase: !csvModal.includeBase})}>
                 <input type="checkbox" checked={csvModal.includeBase} readOnly className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
                 <span className="text-sm text-gray-300">Include Base (e.g., 1, 1.1, 1.2 instead of 1.1, 1.2)</span>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Default Start Time (Optional)</label>
                 <input
@@ -487,7 +473,6 @@ export default function Home() {
                   placeholder="Agar server mein time nahi to yeh use hoga"
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Duration (Optional)</label>
                 <input
@@ -501,9 +486,7 @@ export default function Home() {
             </div>
 
             <div className="pt-6 mt-6 border-t border-gray-800 flex justify-end gap-3">
-              <button onClick={() => setCsvModal({ ...csvModal, isOpen: false })} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors">
-                Cancel
-              </button>
+              <button onClick={() => setCsvModal({ ...csvModal, isOpen: false })} className="px-5 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors">Cancel</button>
               <button onClick={handleCopyCSV} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors shadow-lg shadow-blue-900/50 flex items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 mr-2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
                 Copy to Clipboard
@@ -513,10 +496,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- ADD/EDIT SERVER MODAL UI (UPDATED WITH DATE/TIME PICKER) --- */}
+      {/* ADD/EDIT SERVER MODAL */}
       {serverModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-5xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+          <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-6xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-800 pb-4">
               <h3 className="text-2xl font-bold text-white">
@@ -524,31 +507,41 @@ export default function Home() {
               </h3>
               
               {serverModal.mode === "add" && (
-                <button
-                  onClick={() => setServerModal({ ...serverModal, showBulk: !serverModal.showBulk })}
-                  className="bg-indigo-600/30 text-indigo-400 border border-indigo-500/50 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-600/50 transition-colors flex items-center gap-2"
-                >
+                <button onClick={() => setServerModal({ ...serverModal, showBulk: !serverModal.showBulk })} className="bg-indigo-600/30 text-indigo-400 border border-indigo-500/50 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-600/50 transition-colors flex items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
                   {serverModal.showBulk ? "Close Bulk Import" : "Auto Bulk Import"}
                 </button>
               )}
             </div>
 
+            {/* --- NAYA: MASTER TIME CONTROLLER --- */}
+            <div className="mb-4 shrink-0 bg-blue-900/10 p-4 rounded-xl border border-blue-900/30 flex flex-col md:flex-row gap-4 items-center">
+              <div className="flex-1 w-full max-w-sm">
+                <label className="block text-sm font-medium text-blue-400 mb-1">
+                  ⏱️ Master Time Controller
+                </label>
+                <input
+                  type="datetime-local"
+                  value={serverModal.bulkTime}
+                  onChange={(e) => setServerModal({ ...serverModal, bulkTime: e.target.value })}
+                  className="w-full bg-gray-950 text-white p-2.5 rounded-lg border border-blue-500/50 focus:border-blue-500 outline-none [color-scheme:dark]"
+                />
+              </div>
+              <div className="flex-[2] text-sm text-gray-400 bg-gray-900/50 p-3 rounded-lg">
+                <span className="font-semibold text-gray-300">How to use:</span> Set a time here, then click the checkboxes <b>(☑)</b> next to the servers below to instantly apply this time. Change the time here and check other boxes for a different time!
+              </div>
+            </div>
+
             {serverModal.showBulk && serverModal.mode === "add" && (
               <div className="mb-6 shrink-0 bg-indigo-900/10 p-4 rounded-xl border border-indigo-900/30">
-                <label className="block text-sm font-medium text-indigo-300 mb-2">
-                  Paste Multiple Iframes or URLs here (Comma or newline separated)
-                </label>
+                <label className="block text-sm font-medium text-indigo-300 mb-2">Paste Multiple Iframes or URLs here</label>
                 <textarea
                   className="w-full bg-gray-950 text-gray-300 p-3 rounded-lg border border-indigo-900/50 focus:border-indigo-500 outline-none resize-none h-32 text-sm font-mono"
                   placeholder='<iframe src="https://..."></iframe>&#10;<iframe src="https://..."></iframe>'
                   value={serverModal.bulkText}
                   onChange={(e) => setServerModal({ ...serverModal, bulkText: e.target.value })}
                 />
-                <button
-                  onClick={processBulkImport}
-                  className="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg transition-colors"
-                >
+                <button onClick={processBulkImport} className="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-lg transition-colors">
                   Extract Links & Auto-Fill
                 </button>
               </div>
@@ -556,8 +549,28 @@ export default function Home() {
             
             <div className="overflow-y-auto pr-2 pb-4 space-y-4 flex-1">
               {serverModal.serversList.map((serverInput, index) => (
-                <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 relative group">
-                  <div className="flex-1">
+                <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 relative group items-start">
+                  
+                  {/* --- NAYA: CHECKBOX AUR NUMBER --- */}
+                  <div className="flex flex-col items-center justify-center bg-gray-900 rounded-lg p-2 border border-gray-700 min-w-[48px] h-[66px] self-start md:mt-[22px]">
+                    <span className="text-[10px] text-gray-500 font-bold mb-1">#{index + 1}</span>
+                    <input
+                      type="checkbox"
+                      title="Apply Master Time"
+                      checked={serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== ""}
+                      onChange={(e) => {
+                        if (!serverModal.bulkTime) {
+                          alert("Please set Master Time first!");
+                          return;
+                        }
+                        const newTime = e.target.checked ? serverModal.bulkTime : "";
+                        handleModalInputChange(index, "startTime", newTime);
+                      }}
+                      className="w-4 h-4 cursor-pointer accent-blue-600"
+                    />
+                  </div>
+
+                  <div className="flex-1 w-full">
                     <label className="block text-xs font-medium text-gray-400 mb-1">Server Name</label>
                     <input
                       type="text"
@@ -568,7 +581,7 @@ export default function Home() {
                       autoFocus={index === 0 && !serverModal.showBulk}
                     />
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 w-full">
                     <label className="block text-xs font-medium text-gray-400 mb-1">Iframe/Link URL</label>
                     <input
                       type="text"
@@ -578,9 +591,7 @@ export default function Home() {
                       className="w-full bg-gray-800 text-white p-2.5 rounded-lg border border-gray-600 focus:border-blue-500 outline-none"
                     />
                   </div>
-                  
-                  {/* --- NAYA DATE & TIME PICKER (CALENDAR) --- */}
-                  <div className="flex-1">
+                  <div className="flex-1 w-full">
                     <label className="block text-xs font-medium text-gray-400 mb-1">Match Time (Optional)</label>
                     <input
                       type="datetime-local"
@@ -613,12 +624,8 @@ export default function Home() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setServerModal({ ...serverModal, isOpen: false })} className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors">
-                  Cancel
-                </button>
-                <button onClick={handleServerModalSubmit} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors shadow-lg shadow-blue-900/50">
-                  Save All Data
-                </button>
+                <button onClick={() => setServerModal({ ...serverModal, isOpen: false })} className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-white font-medium transition-colors">Cancel</button>
+                <button onClick={handleServerModalSubmit} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors shadow-lg shadow-blue-900/50">Save All Data</button>
               </div>
             </div>
 
