@@ -10,7 +10,6 @@ export default function Home() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal State mein bulkTime add kar diya hai
   const [serverModal, setServerModal] = useState({
     isOpen: false,
     mode: "add",
@@ -21,7 +20,7 @@ export default function Home() {
     serversList: [{ name: "", url: "", startTime: "" }],
     showBulk: false,
     bulkText: "",
-    bulkTime: "" // <-- NAYA: Master time controller state
+    bulkTime: "" 
   });
 
   const [csvModal, setCsvModal] = useState({
@@ -160,7 +159,7 @@ export default function Home() {
       serversList: [{ name: "", url: "", startTime: "" }],
       showBulk: false,
       bulkText: "",
-      bulkTime: "" // Reset
+      bulkTime: "" 
     });
   };
 
@@ -175,7 +174,7 @@ export default function Home() {
       serversList: [{ name: oldName, url: oldUrl, startTime: oldStartTime || "" }],
       showBulk: false,
       bulkText: "",
-      bulkTime: "" // Reset
+      bulkTime: "" 
     });
   };
 
@@ -222,7 +221,7 @@ export default function Home() {
     const newRows = extractedUrls.map((url, index) => ({
       name: `Server ${startIndex + index + 1}`,
       url: url,
-      startTime: serverModal.bulkTime || "" // Agar upar time set hai to import ke waqt hi apply ho jayega
+      startTime: serverModal.bulkTime || "" 
     }));
 
     setServerModal({
@@ -514,21 +513,49 @@ export default function Home() {
               )}
             </div>
 
-            {/* --- NAYA: MASTER TIME CONTROLLER --- */}
-            <div className="mb-4 shrink-0 bg-blue-900/10 p-4 rounded-xl border border-blue-900/30 flex flex-col md:flex-row gap-4 items-center">
-              <div className="flex-1 w-full max-w-sm">
-                <label className="block text-sm font-medium text-blue-400 mb-1">
+            {/* --- MASTER TIME CONTROLLER + DYNAMIC CHECKBOXES --- */}
+            <div className="mb-4 shrink-0 bg-blue-900/10 p-5 rounded-xl border border-blue-900/30 flex flex-col md:flex-row gap-6 items-start">
+              <div className="w-full md:w-1/3">
+                <label className="block text-sm font-medium text-blue-400 mb-2">
                   ⏱️ Master Time Controller
                 </label>
                 <input
                   type="datetime-local"
                   value={serverModal.bulkTime}
                   onChange={(e) => setServerModal({ ...serverModal, bulkTime: e.target.value })}
-                  className="w-full bg-gray-950 text-white p-2.5 rounded-lg border border-blue-500/50 focus:border-blue-500 outline-none [color-scheme:dark]"
+                  className="w-full bg-gray-950 text-white p-3 rounded-lg border border-blue-500/50 focus:border-blue-500 outline-none [color-scheme:dark]"
                 />
               </div>
-              <div className="flex-[2] text-sm text-gray-400 bg-gray-900/50 p-3 rounded-lg">
-                <span className="font-semibold text-gray-300">How to use:</span> Set a time here, then click the checkboxes <b>(☑)</b> next to the servers below to instantly apply this time. Change the time here and check other boxes for a different time!
+              
+              <div className="w-full md:w-2/3 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                <p className="text-xs text-gray-400 mb-3 font-medium">Select servers below to apply this master time:</p>
+                <div className="flex flex-wrap gap-2">
+                  {serverModal.serversList.map((serverInput, index) => (
+                    <label 
+                      key={index} 
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all border ${
+                        serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== "" 
+                          ? "bg-blue-900/40 border-blue-500/50" 
+                          : "bg-gray-800 border-gray-700 hover:bg-gray-700"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== ""}
+                        onChange={(e) => {
+                          if (!serverModal.bulkTime) {
+                            alert("Please set Master Time first!");
+                            return;
+                          }
+                          const newTime = e.target.checked ? serverModal.bulkTime : "";
+                          handleModalInputChange(index, "startTime", newTime);
+                        }}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-gray-300">Server #{index + 1}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -551,30 +578,14 @@ export default function Home() {
               {serverModal.serversList.map((serverInput, index) => (
                 <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-800/50 p-4 rounded-xl border border-gray-700 relative group items-start">
                   
-                  {/* --- NAYA: CHECKBOX AUR NUMBER --- */}
-                  <div className="flex flex-col items-center justify-center bg-gray-900 rounded-lg p-2 border border-gray-700 min-w-[48px] h-[66px] self-start md:mt-[22px]">
-                    <span className="text-[10px] text-gray-500 font-bold mb-1">#{index + 1}</span>
-                    <input
-                      type="checkbox"
-                      title="Apply Master Time"
-                      checked={serverInput.startTime === serverModal.bulkTime && serverModal.bulkTime !== ""}
-                      onChange={(e) => {
-                        if (!serverModal.bulkTime) {
-                          alert("Please set Master Time first!");
-                          return;
-                        }
-                        const newTime = e.target.checked ? serverModal.bulkTime : "";
-                        handleModalInputChange(index, "startTime", newTime);
-                      }}
-                      className="w-4 h-4 cursor-pointer accent-blue-600"
-                    />
-                  </div>
-
+                  {/* Clean UI: Checkbox removed from here and moved to the top panel */}
                   <div className="flex-1 w-full">
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Server Name</label>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      <span className="text-blue-400 font-bold mr-1">#{index + 1}</span> Server Name
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g., Server 1"
+                      placeholder={`Server ${index + 1}`}
                       value={serverInput.name}
                       onChange={(e) => handleModalInputChange(index, "name", e.target.value)}
                       className="w-full bg-gray-800 text-white p-2.5 rounded-lg border border-gray-600 focus:border-blue-500 outline-none"
