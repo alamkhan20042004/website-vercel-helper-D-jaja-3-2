@@ -8,10 +8,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Vercel server se request bhej rahe hain, yahan hum headers fake kar sakte hain
     const response = await fetch(url, {
       headers: {
-        "Referer": "https://dlhd.pk/", // DaddyLive ko lagega request unhi ki site se hai
+        "Referer": "https://dlhd.pk/",
         "Origin": "https://dlhd.pk",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
@@ -19,10 +18,26 @@ export async function GET(req: NextRequest) {
 
     let html = await response.text();
 
-    // Base tag inject karna zaroori hai taake video player ki files (CSS/JS/m3u8) sahi jagah se load hon
     const origin = new URL(url).origin;
     const baseTag = `<base href="${origin}/">`;
-    html = html.replace(/<head[^>]*>/i, `$& \n ${baseTag}`);
+    
+    // YEH TRICK HAI: JavaScript ko dhoka dene ke liye fake domain set kar rahe hain
+    const bypassScript = `
+      <script>
+        try {
+          Object.defineProperty(document, 'domain', { get: function() { return 'dlhd.pk'; } });
+        } catch(e) {}
+        try {
+          Object.defineProperty(window.location, 'hostname', { get: function() { return 'dlhd.pk'; } });
+        } catch(e) {}
+        try {
+           Object.defineProperty(window.location, 'host', { get: function() { return 'dlhd.pk'; } });
+        } catch(e) {}
+      </script>
+    `;
+
+    // Base tag aur Bypass script ko <head> ke foran baad laga rahe hain
+    html = html.replace(/<head[^>]*>/i, `$& \n ${baseTag} \n ${bypassScript}`);
 
     return new NextResponse(html, {
       headers: {
