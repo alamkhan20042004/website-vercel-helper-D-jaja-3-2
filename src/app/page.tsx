@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Website, Category, Channel, Server } from "@/lib/data";
-
+//
 export default function Home() {
   const [websitesData, setWebsitesData] = useState<Website[]>([]);
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null);
