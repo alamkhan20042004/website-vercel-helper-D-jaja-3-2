@@ -4,6 +4,23 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Website, Category, Channel, Server } from "@/lib/data";
 
+// ⚡ Type for Saved CSV Templates
+type CsvRow = {
+  channel: string;
+  urls: string;
+  server: string;
+  quality: string;
+  duration: string;
+  startTime: string;
+};
+
+type SavedCsvTemplate = {
+  id: string;
+  description: string;
+  timestamp: number;
+  rows: CsvRow[];
+};
+
 export default function Home() {
   const [websitesData, setWebsitesData] = useState<Website[]>([]);
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null);
@@ -34,18 +51,17 @@ export default function Home() {
     duration: ""
   });
 
-  // ⚡ UPDATED: Advanced CSV Builder (Mixed Channels + Master Time)
+  // ⚡ UPDATED: Advanced CSV Builder (Row-Specific Data + Save System)
   const [csvBuilder, setCsvBuilder] = useState({
     isOpen: false,
-    defaultPrefix: "1", // Sirf bulk import mein auto-fill karne ke liye
-    quality: "110KBps (Balanced 480p)",
-    server: "None",
-    duration: "None",
     masterTime: "",
-    rows: [{ channel: "", urls: "", startTime: "" }], // Har row apna channel khud rakhegi
+    rows: [{ channel: "", urls: "", server: "", quality: "", duration: "", startTime: "" }] as CsvRow[],
     showBulk: false,
     bulkText: ""
   });
+
+  // ⚡ Saved Templates State
+  const [savedCsvs, setSavedCsvs] = useState<SavedCsvTemplate[]>([]);
 
   useEffect(() => {
     fetch('/api/websites')
@@ -54,7 +70,20 @@ export default function Home() {
         setWebsitesData(data);
         setIsLoading(false);
       });
+
+    // Load saved templates from LocalStorage on mount
+    const saved = localStorage.getItem("savedCsvTemplates");
+    if (saved) {
+      try {
+        setSavedCsvs(JSON.parse(saved));
+      } catch (e) { console.error("Failed to parse saved CSVs"); }
+    }
   }, []);
+
+  const saveCsvTemplatesToLocal = (data: SavedCsvTemplate[]) => {
+    setSavedCsvs(data);
+    localStorage.setItem("savedCsvTemplates", JSON.stringify(data));
+  };
 
   const saveData = async (newData: Website[]) => {
     setWebsitesData(newData);
@@ -97,6 +126,21 @@ export default function Home() {
     return `${datePart} ${formattedHours}:${minutes} ${ampm}`;
   };
 
+  // Format timestamp for display (e.g., 02/06/2026 01:20 PM)
+  const formatTimestampDisplay = (ts: number) => {
+    const d = new Date(ts);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    let h = d.getHours();
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    const hrs = String(h).padStart(2, '0');
+    return `${day}/${month}/${year} ${hrs}:${min} ${ampm}`;
+  };
+
   const handleCopyCSV = () => {
     if (!csvModal.channel) return;
 
@@ -132,9 +176,9 @@ export default function Home() {
   };
 
   // ====================================================================
-  // ⚡ CSV BUILDER FUNCTIONS (Naya System with Mixed Channels)
+  // ⚡ CSV BUILDER FUNCTIONS (Row-Level Manual Entry)
   // ====================================================================
-  const handleCsvBuilderRowChange = (index: number, field: "channel" | "urls" | "startTime", value: string) => {
+  const handleCsvBuilderRowChange = (index: number, field: keyof CsvRow, value: string) => {
     const newRows = [...csvBuilder.rows];
     newRows[index][field] = value;
     setCsvBuilder({ ...csvBuilder, rows: newRows });
@@ -151,7 +195,7 @@ export default function Home() {
   };
 
   const addCsvBuilderRow = () => {
-    setCsvBuilder({ ...csvBuilder, rows: [...csvBuilder.rows, { channel: "", urls: "", startTime: "" }] });
+    setCsvBuilder({ ...csvBuilder, rows: [...csvBuilder.rows, { channel: "", urls: "", server: "", quality: "", duration: "", startTime: "" }] });
   };
 
   const removeCsvBuilderRow = (index: number) => {
@@ -164,10 +208,9 @@ export default function Home() {
     if (!text.trim()) return;
 
     const lines = text.split('\n').filter(l => l.trim() !== '');
-    const currentValid = csvBuilder.rows.filter(r => r.urls.trim());
-    const startIndex = currentValid.length;
-
-    const newRows = lines.map((line, index) => {
+    const currentValid = csvBuilder.rows.filter(r => r.urls.trim() || r.channel.trim());
+    
+    const newRows = lines.map((line) => {
       let formattedUrls = line.trim();
       if (formattedUrls.includes('http') && !formattedUrls.includes('|')) {
         const extracted = formattedUrls.match(/https?:\/\/[^\s,]+/g);
@@ -176,9 +219,11 @@ export default function Home() {
         }
       }
       return {
-        // Auto-assigning prefix + index just for convenience, user can edit it later
-        channel: `${csvBuilder.defaultPrefix}.${startIndex + index + 1}`, 
+        channel: "", 
         urls: formattedUrls,
+        server: "",
+        quality: "",
+        duration: "",
         startTime: csvBuilder.masterTime || ""
       };
     });
@@ -192,24 +237,25 @@ export default function Home() {
   };
 
   const generateAndCopyCsvBuilder = () => {
-    const validRows = csvBuilder.rows.filter(r => r.urls.trim());
+    const validRows = csvBuilder.rows.filter(r => r.urls.trim() || r.channel.trim());
     if (validRows.length === 0) {
-      alert("Please add at least one row with URLs!");
+      alert("Please add at least one row with data!");
       return;
     }
 
     let csvData = "TargetURL,Channel,Quality,Server,StartTime,Duration\n";
-    const dur = csvBuilder.duration.trim() || "None";
-    const qual = csvBuilder.quality.trim() || "110KBps (Balanced 480p)";
-    const srv = csvBuilder.server.trim() || "None";
 
-    validRows.forEach((row, index) => {
-      // Agar channel khali chor diya toh default prefix use kar lo fallback k taur par
-      const channelNum = row.channel.trim() || `${csvBuilder.defaultPrefix}.${index + 1}`;
+    validRows.forEach((row) => {
+      const channelNum = row.channel.trim() || "None";
+      const urls = row.urls.trim() || "None";
+      const qual = row.quality.trim() || "None";
+      const srv = row.server.trim() || "None";
+      const dur = row.duration.trim() || "None";
+      
       const rawTimeToUse = row.startTime || "None";
       const finalStartTime = rawTimeToUse !== "None" ? formatDateTimeForCSV(rawTimeToUse) : "None";
 
-      csvData += `${row.urls},${channelNum},${qual},${srv},${finalStartTime},${dur}\n`;
+      csvData += `${urls},${channelNum},${qual},${srv},${finalStartTime},${dur}\n`;
     });
 
     navigator.clipboard.writeText(csvData)
@@ -221,6 +267,47 @@ export default function Home() {
         console.error("Failed to copy text: ", err);
         alert("Copy karne mein masla pesh aaya.");
       });
+  };
+
+  // ⚡ SAVED SYSTEM HANDLERS
+  const handleSaveCurrentCsv = () => {
+    const validRows = csvBuilder.rows.filter(r => r.urls.trim() || r.channel.trim());
+    if (validRows.length === 0) {
+      alert("No data to save! Please add at least one row.");
+      return;
+    }
+    const desc = window.prompt("Enter a description to identify this save (e.g., 'World Cup Semi-Final'):");
+    if (!desc) return;
+
+    const newSave: SavedCsvTemplate = {
+      id: Date.now().toString(),
+      description: desc,
+      timestamp: Date.now(),
+      rows: [...validRows]
+    };
+
+    saveCsvTemplatesToLocal([newSave, ...savedCsvs]);
+    alert("Configuration Saved Successfully!");
+  };
+
+  const handleLoadSavedCsv = (template: SavedCsvTemplate) => {
+    if (window.confirm(`Are you sure you want to load '${template.description}'? Current data will be replaced.`)) {
+      setCsvBuilder({ ...csvBuilder, rows: [...template.rows], showBulk: false });
+    }
+  };
+
+  const handleEditSavedCsvDesc = (id: string, oldDesc: string) => {
+    const newDesc = window.prompt("Edit Description:", oldDesc);
+    if (!newDesc || newDesc === oldDesc) return;
+    
+    const updated = savedCsvs.map(s => s.id === id ? { ...s, description: newDesc } : s);
+    saveCsvTemplatesToLocal(updated);
+  };
+
+  const handleDeleteSavedCsv = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this saved record?")) {
+      saveCsvTemplatesToLocal(savedCsvs.filter(s => s.id !== id));
+    }
   };
   // ====================================================================
 
@@ -427,7 +514,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-12 lg:p-24 font-[family-name:var(--font-geist-sans)] relative">
+    <div className="min-h-screen bg-black text-white p-6 md:p-12 lg:p-24 font-[family-name:var(--font-geist-sans)] relative overflow-x-hidden">
       <header className="mb-12 flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-4">
         <div>
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-200 to-gray-500">
@@ -456,6 +543,7 @@ export default function Home() {
       </header>
 
       <main className="space-y-16">
+        {/* ... (Existing Websites/Categories UI remains identical) ... */}
         {websitesData.map((website) => (
           <section key={website.id} className="space-y-8">
             <h2 className="text-3xl font-bold text-white border-b border-gray-800 pb-4">{website.name}</h2>
@@ -630,19 +718,27 @@ export default function Home() {
         </div>
       )}
 
-      {/* ⚡ NEW MODAL: DEDICATED CSV RECORD BUILDER (Master Time + Mixed Channels) */}
+      {/* ⚡ NEW MODAL: DEDICATED CSV RECORD BUILDER (Master Time + Manual Row Details + Saves) */}
       {csvBuilder.isOpen && (
         <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           
-          <div className="flex-1 w-full h-full max-w-7xl mx-auto flex flex-col p-4 md:p-8">
+          <div className="flex-1 w-full h-full max-w-7xl mx-auto flex flex-col p-4 md:p-8 overflow-hidden">
             
-            <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-800 pb-4">
-              <h3 className="text-3xl font-bold text-white flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8 text-indigo-500"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
-                Create CSV Records
-              </h3>
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 border-b border-gray-800 pb-4 gap-4">
+              <div>
+                <h3 className="text-3xl font-bold text-white flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8 text-indigo-500"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                  Create CSV Records
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">Manual filling system with save functionality</p>
+              </div>
               
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-3">
+                <button onClick={handleSaveCurrentCsv} className="bg-emerald-600/30 text-emerald-400 border border-emerald-500/50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600/50 transition-colors flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
+                  Save Current Config
+                </button>
                 <button onClick={() => setCsvBuilder({ ...csvBuilder, showBulk: !csvBuilder.showBulk })} className="bg-indigo-600/30 text-indigo-400 border border-indigo-500/50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-600/50 transition-colors flex items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
                   {csvBuilder.showBulk ? "Close Auto Import" : "Auto Bulk Import"}
@@ -655,6 +751,26 @@ export default function Home() {
 
             <div className="shrink-0 mb-6 flex flex-col gap-4">
               
+              {/* ⚡ SAVED TEMPLATES AREA */}
+              {savedCsvs.length > 0 && (
+                <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800 flex items-center gap-3 overflow-x-auto custom-scrollbar whitespace-nowrap">
+                  <span className="text-sm font-medium text-gray-400 shrink-0">📂 Saved:</span>
+                  {savedCsvs.map((save) => (
+                    <div key={save.id} className="bg-gray-800 px-3 py-2 rounded-lg flex items-center gap-3 border border-gray-700 shrink-0">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-gray-200">{save.description}</span>
+                        <span className="text-[10px] text-gray-500">{formatTimestampDisplay(save.timestamp)}</span>
+                      </div>
+                      <div className="flex gap-1 ml-2">
+                        <button onClick={() => handleLoadSavedCsv(save)} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded" title="Load">Load</button>
+                        <button onClick={() => handleEditSavedCsvDesc(save.id, save.description)} className="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-2 py-1 rounded" title="Edit Name">✎</button>
+                        <button onClick={() => handleDeleteSavedCsv(save.id)} className="bg-red-900/50 hover:bg-red-800 text-red-300 text-xs px-2 py-1 rounded" title="Delete">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* ⚡ MASTER TIME CONTROLLER */}
               <div className="bg-indigo-900/10 p-5 rounded-2xl border border-indigo-900/30 flex flex-col md:flex-row gap-6 items-start">
                 <div className="w-full md:w-1/3">
@@ -671,7 +787,7 @@ export default function Home() {
                 
                 <div className="w-full md:w-2/3 bg-[#0a0a0a]/50 p-4 rounded-xl border border-gray-800">
                   <p className="text-sm text-gray-400 mb-3 font-medium">Select rows below to apply this master time:</p>
-                  <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[100px] pr-2 custom-scrollbar">
+                  <div className="flex flex-wrap gap-2 overflow-y-auto max-h-[80px] pr-2 custom-scrollbar">
                     {csvBuilder.rows.map((row, index) => {
                       const hasTime = row.startTime && row.startTime !== "";
                       const isSelectedWithBulk = row.startTime === csvBuilder.masterTime && csvBuilder.masterTime !== "";
@@ -686,7 +802,7 @@ export default function Home() {
                       return (
                         <label 
                           key={index} 
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer transition-all border ${labelClasses}`}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-all border ${labelClasses}`}
                         >
                           <input
                             type="checkbox"
@@ -699,9 +815,9 @@ export default function Home() {
                               const newTime = e.target.checked ? csvBuilder.masterTime : "";
                               handleCsvBuilderRowChange(index, "startTime", newTime);
                             }}
-                            className="w-4 h-4 accent-indigo-500 cursor-pointer"
+                            className="w-3.5 h-3.5 accent-indigo-500 cursor-pointer"
                           />
-                          <span className="text-sm font-bold text-gray-300">Row #{index + 1}</span>
+                          <span className="text-xs font-bold text-gray-300">Row #{index + 1}</span>
                         </label>
                       );
                     })}
@@ -709,50 +825,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* ⚡ GLOBAL SETTINGS */}
-              <div className="bg-gray-900 p-5 rounded-2xl border border-gray-800 grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Default Prefix (For Auto-fill)</label>
-                  <input
-                    type="text"
-                    value={csvBuilder.defaultPrefix}
-                    onChange={(e) => setCsvBuilder({...csvBuilder, defaultPrefix: e.target.value})}
-                    placeholder="e.g., 5 or s2"
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Target Server (Default: None)</label>
-                  <input
-                    type="text"
-                    value={csvBuilder.server}
-                    onChange={(e) => setCsvBuilder({...csvBuilder, server: e.target.value})}
-                    placeholder="e.g., None"
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Speed / Quality</label>
-                  <input
-                    type="text"
-                    value={csvBuilder.quality}
-                    onChange={(e) => setCsvBuilder({...csvBuilder, quality: e.target.value})}
-                    placeholder="e.g., 110KBps (Balanced 480p)"
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Duration</label>
-                  <input
-                    type="text"
-                    value={csvBuilder.duration}
-                    onChange={(e) => setCsvBuilder({...csvBuilder, duration: e.target.value})}
-                    placeholder="e.g., 4h or None"
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
-                  />
-                </div>
-              </div>
-
+              {/* ⚡ BULK IMPORT */}
               {csvBuilder.showBulk && (
                 <div className="bg-indigo-900/10 p-5 rounded-2xl border border-indigo-900/30">
                   <label className="block text-sm font-medium text-indigo-300 mb-2">Paste Links (New line = New Row, Space/Comma = Auto Pipe | format)</label>
@@ -763,59 +836,95 @@ export default function Home() {
                     onChange={(e) => setCsvBuilder({ ...csvBuilder, bulkText: e.target.value })}
                   />
                   <button onClick={processCsvBulkImport} className="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors text-base shadow-lg shadow-indigo-900/20">
-                    Extract Links & Auto-Fill Rows
+                    Extract Links & Generate Blank Rows
                   </button>
                 </div>
               )}
             </div>
             
-            {/* ⚡ ROWS AREA (With Mixed Channel Input) */}
+            {/* ⚡ ROWS AREA (Purely Manual Fill with Examples) */}
             <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-6 space-y-4 custom-scrollbar">
               {csvBuilder.rows.map((row, index) => (
-                <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-900 p-5 rounded-2xl border border-gray-800 relative group items-start hover:border-gray-700 transition-colors">
+                <div key={index} className="flex flex-col gap-3 bg-gray-900 p-4 rounded-2xl border border-gray-800 relative group hover:border-gray-700 transition-colors">
                   
-                  <div className="flex-none w-full md:w-[20%]">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Channel ID
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={`e.g., 5, 4.2, s2`}
-                      value={row.channel}
-                      onChange={(e) => handleCsvBuilderRowChange(index, "channel", e.target.value)}
-                      className="w-full bg-[#0a0a0a] text-white p-3.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
-                    />
+                  {/* Top Line of Inputs */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    <div className="lg:col-span-2">
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Channel ID</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 5.1, 4.2, s2"
+                        value={row.channel}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "channel", e.target.value)}
+                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
+                      />
+                    </div>
+
+                    <div className="lg:col-span-7">
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                        Target URLs <span className="text-[10px] font-normal text-gray-500 ml-1">(Auto-formats with | on blur)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., https://link1.com | https://link2.com"
+                        value={row.urls}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "urls", e.target.value)}
+                        onBlur={() => formatUrlsOnBlur(index)}
+                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
+                        autoFocus={index === 0 && !csvBuilder.showBulk}
+                      />
+                    </div>
+                    
+                    <div className="lg:col-span-3">
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Override Time</label>
+                      <input
+                        type="datetime-local"
+                        value={row.startTime}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "startTime", e.target.value)}
+                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none [color-scheme:dark] transition-colors text-sm"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex-1 w-full md:w-[55%]">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Target URLs <span className="text-xs font-normal text-gray-500 ml-2">(Auto-formats with | on blur)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., https://link1.com | https://link2.com"
-                      value={row.urls}
-                      onChange={(e) => handleCsvBuilderRowChange(index, "urls", e.target.value)}
-                      onBlur={() => formatUrlsOnBlur(index)}
-                      className="w-full bg-[#0a0a0a] text-white p-3.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
-                      autoFocus={index === 0 && !csvBuilder.showBulk}
-                    />
+                  {/* Bottom Line of Inputs */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Target Server</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., None"
+                        value={row.server}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "server", e.target.value)}
+                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Speed / Quality</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 110KBps (Balanced 480p)"
+                        value={row.quality}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "quality", e.target.value)}
+                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Duration</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 4h 30m, 5h, None"
+                        value={row.duration}
+                        onChange={(e) => handleCsvBuilderRowChange(index, "duration", e.target.value)}
+                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                      />
+                    </div>
                   </div>
                   
-                  <div className="flex-none w-full md:w-[25%]">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Override Time</label>
-                    <input
-                      type="datetime-local"
-                      value={row.startTime}
-                      onChange={(e) => handleCsvBuilderRowChange(index, "startTime", e.target.value)}
-                      className="w-full bg-[#0a0a0a] text-white p-3.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none [color-scheme:dark] transition-colors text-sm"
-                    />
-                  </div>
-                  
+                  {/* Delete Row Button */}
                   {csvBuilder.rows.length > 1 && (
                     <button 
                       onClick={() => removeCsvBuilderRow(index)}
-                      className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-2 hover:bg-red-500 shadow-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110"
+                      className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-500 shadow-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110"
                       title="Remove Row"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
@@ -825,6 +934,7 @@ export default function Home() {
               ))}
             </div>
 
+            {/* Bottom Actions */}
             <div className="pt-6 mt-2 border-t border-gray-800 flex justify-between items-center shrink-0 bg-[#0a0a0a]">
               <div>
                 <button onClick={addCsvBuilderRow} className="px-5 py-3.5 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 font-medium transition-colors flex items-center text-base">
@@ -1017,7 +1127,6 @@ export default function Home() {
     </div>
   );
 }
-
 
 
 
