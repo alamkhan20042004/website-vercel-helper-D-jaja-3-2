@@ -12,6 +12,7 @@ type CsvRow = {
   quality: string;
   duration: string;
   startTime: string;
+  isExpanded?: boolean; // ⚡ Menu style Open/Close state ke liye
 };
 
 type SavedCsvTemplate = {
@@ -51,11 +52,19 @@ export default function Home() {
     duration: ""
   });
 
-  // ⚡ UPDATED: Advanced CSV Builder (Row-Specific Data + Save System)
+  // ⚡ UPDATED: Advanced CSV Builder with Accordion System & Defaults
   const [csvBuilder, setCsvBuilder] = useState({
     isOpen: false,
     masterTime: "",
-    rows: [{ channel: "", urls: "", server: "", quality: "", duration: "", startTime: "" }] as CsvRow[],
+    rows: [{ 
+      channel: "", 
+      urls: "", 
+      server: "None", 
+      quality: "110KBps (Balanced 480p)", 
+      duration: "None", 
+      startTime: "", 
+      isExpanded: true 
+    }] as CsvRow[],
     showBulk: false,
     bulkText: ""
   });
@@ -71,7 +80,6 @@ export default function Home() {
         setIsLoading(false);
       });
 
-    // Load saved templates from LocalStorage on mount
     const saved = localStorage.getItem("savedCsvTemplates");
     if (saved) {
       try {
@@ -126,7 +134,6 @@ export default function Home() {
     return `${datePart} ${formattedHours}:${minutes} ${ampm}`;
   };
 
-  // Format timestamp for display (e.g., 02/06/2026 01:20 PM)
   const formatTimestampDisplay = (ts: number) => {
     const d = new Date(ts);
     const day = String(d.getDate()).padStart(2, '0');
@@ -176,8 +183,14 @@ export default function Home() {
   };
 
   // ====================================================================
-  // ⚡ CSV BUILDER FUNCTIONS (Row-Level Manual Entry)
+  // ⚡ CSV BUILDER FUNCTIONS (Row-Level Manual Entry & Accordion)
   // ====================================================================
+  const toggleCsvBuilderRow = (index: number) => {
+    const newRows = [...csvBuilder.rows];
+    newRows[index].isExpanded = !newRows[index].isExpanded;
+    setCsvBuilder({ ...csvBuilder, rows: newRows });
+  };
+
   const handleCsvBuilderRowChange = (index: number, field: keyof CsvRow, value: string) => {
     const newRows = [...csvBuilder.rows];
     newRows[index][field] = value;
@@ -195,7 +208,21 @@ export default function Home() {
   };
 
   const addCsvBuilderRow = () => {
-    setCsvBuilder({ ...csvBuilder, rows: [...csvBuilder.rows, { channel: "", urls: "", server: "", quality: "", duration: "", startTime: "" }] });
+    setCsvBuilder({ 
+      ...csvBuilder, 
+      rows: [
+        ...csvBuilder.rows, 
+        { 
+          channel: "", 
+          urls: "", 
+          server: "None", 
+          quality: "110KBps (Balanced 480p)", 
+          duration: "None", 
+          startTime: "", 
+          isExpanded: true // Fresh row always opens expanded
+        }
+      ] 
+    });
   };
 
   const removeCsvBuilderRow = (index: number) => {
@@ -221,10 +248,11 @@ export default function Home() {
       return {
         channel: "", 
         urls: formattedUrls,
-        server: "",
-        quality: "",
-        duration: "",
-        startTime: csvBuilder.masterTime || ""
+        server: "None",
+        quality: "110KBps (Balanced 480p)",
+        duration: "None",
+        startTime: csvBuilder.masterTime || "",
+        isExpanded: false // Bulk import rows stay collapsed to save space
       };
     });
 
@@ -279,11 +307,13 @@ export default function Home() {
     const desc = window.prompt("Enter a description to identify this save (e.g., 'World Cup Semi-Final'):");
     if (!desc) return;
 
+    const savedRows = validRows.map(r => ({ ...r, isExpanded: false })); // Save them collapsed
+
     const newSave: SavedCsvTemplate = {
       id: Date.now().toString(),
       description: desc,
       timestamp: Date.now(),
-      rows: [...validRows]
+      rows: savedRows
     };
 
     saveCsvTemplatesToLocal([newSave, ...savedCsvs]);
@@ -543,7 +573,7 @@ export default function Home() {
       </header>
 
       <main className="space-y-16">
-        {/* ... (Existing Websites/Categories UI remains identical) ... */}
+        {/* ... (Existing Websites/Categories UI) ... */}
         {websitesData.map((website) => (
           <section key={website.id} className="space-y-8">
             <h2 className="text-3xl font-bold text-white border-b border-gray-800 pb-4">{website.name}</h2>
@@ -718,7 +748,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ⚡ NEW MODAL: DEDICATED CSV RECORD BUILDER (Master Time + Manual Row Details + Saves) */}
+      {/* ⚡ NEW MODAL: DEDICATED CSV RECORD BUILDER (Master Time + Accordion UI + Saves + Defaults) */}
       {csvBuilder.isOpen && (
         <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           
@@ -842,93 +872,124 @@ export default function Home() {
               )}
             </div>
             
-            {/* ⚡ ROWS AREA (Purely Manual Fill with Examples) */}
-            <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-6 space-y-4 custom-scrollbar">
+            {/* ⚡ ROWS AREA (Accordion Style UI) */}
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-6 space-y-3 custom-scrollbar">
               {csvBuilder.rows.map((row, index) => (
-                <div key={index} className="flex flex-col gap-3 bg-gray-900 p-4 rounded-2xl border border-gray-800 relative group hover:border-gray-700 transition-colors">
+                <div key={index} className="flex flex-col bg-gray-900 rounded-2xl border border-gray-800 transition-colors overflow-hidden group hover:border-gray-700">
                   
-                  {/* Top Line of Inputs */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                    <div className="lg:col-span-2">
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Channel ID</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., 5.1, 4.2, s2"
-                        value={row.channel}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "channel", e.target.value)}
-                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
-                      />
-                    </div>
-
-                    <div className="lg:col-span-7">
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                        Target URLs <span className="text-[10px] font-normal text-gray-500 ml-1">(Auto-formats with | on blur)</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., https://link1.com | https://link2.com"
-                        value={row.urls}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "urls", e.target.value)}
-                        onBlur={() => formatUrlsOnBlur(index)}
-                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
-                        autoFocus={index === 0 && !csvBuilder.showBulk}
-                      />
+                  {/* Accordion Header (Menu Bar) */}
+                  <div 
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/80 transition-colors"
+                    onClick={() => toggleCsvBuilderRow(index)}
+                  >
+                    <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                      <span className="text-indigo-400 font-bold text-sm bg-indigo-900/30 px-3 py-1 rounded-full whitespace-nowrap">
+                        Row #{index + 1}
+                      </span>
+                      
+                      {/* Compact Preview when closed */}
+                      {!row.isExpanded && (
+                        <div className="flex items-center gap-3 text-sm text-gray-400 truncate flex-1">
+                          <span className="font-mono text-gray-300 shrink-0">{row.channel || "No Ch"}</span>
+                          <span className="truncate max-w-full text-xs bg-black/40 px-2 py-1 rounded border border-gray-800">{row.urls || "Empty URLs..."}</span>
+                          {row.startTime && <span className="text-blue-400 text-xs shrink-0">🕒 {formatDateTimeForCSV(row.startTime)}</span>}
+                        </div>
+                      )}
                     </div>
                     
-                    <div className="lg:col-span-3">
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Override Time</label>
-                      <input
-                        type="datetime-local"
-                        value={row.startTime}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "startTime", e.target.value)}
-                        className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none [color-scheme:dark] transition-colors text-sm"
-                      />
+                    <div className="flex items-center gap-3 shrink-0">
+                      {csvBuilder.rows.length > 1 && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); removeCsvBuilderRow(index); }}
+                          className="text-gray-500 hover:bg-red-900/50 hover:text-red-400 rounded-full p-2 transition-all"
+                          title="Remove Row"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${row.isExpanded ? "rotate-180" : ""}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                      </svg>
                     </div>
                   </div>
 
-                  {/* Bottom Line of Inputs */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Target Server</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., None"
-                        value={row.server}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "server", e.target.value)}
-                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
-                      />
+                  {/* Accordion Body (Form Area) */}
+                  {row.isExpanded && (
+                    <div className="p-4 pt-1 border-t border-gray-800/50 flex flex-col gap-4 animate-in slide-in-from-top-2 duration-200">
+                      
+                      {/* Top Line of Inputs */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                        <div className="lg:col-span-2">
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">Channel ID</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., 5.1, 4.2"
+                            value={row.channel}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "channel", e.target.value)}
+                            className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
+                          />
+                        </div>
+
+                        <div className="lg:col-span-7">
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                            Target URLs <span className="text-[10px] font-normal text-gray-500 ml-1">(Auto-formats with | on blur)</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., https://link1.com | https://link2.com"
+                            value={row.urls}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "urls", e.target.value)}
+                            onBlur={() => formatUrlsOnBlur(index)}
+                            className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
+                          />
+                        </div>
+                        
+                        <div className="lg:col-span-3">
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">Override Time</label>
+                          <input
+                            type="datetime-local"
+                            value={row.startTime}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "startTime", e.target.value)}
+                            className="w-full bg-[#0a0a0a] text-white p-3 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none [color-scheme:dark] transition-colors text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Bottom Line of Inputs */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">Target Server</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., None"
+                            value={row.server}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "server", e.target.value)}
+                            className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">Speed / Quality</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., 110KBps (Balanced 480p)"
+                            value={row.quality}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "quality", e.target.value)}
+                            className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-400 mb-1.5">Duration</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., None"
+                            value={row.duration}
+                            onChange={(e) => handleCsvBuilderRowChange(index, "duration", e.target.value)}
+                            className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
+                          />
+                        </div>
+                      </div>
+                      
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Speed / Quality</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., 110KBps (Balanced 480p)"
-                        value={row.quality}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "quality", e.target.value)}
-                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Duration</label>
-                      <input
-                        type="text"
-                        placeholder="e.g., 4h 30m, 5h, None"
-                        value={row.duration}
-                        onChange={(e) => handleCsvBuilderRowChange(index, "duration", e.target.value)}
-                        className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors text-sm"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Delete Row Button */}
-                  {csvBuilder.rows.length > 1 && (
-                    <button 
-                      onClick={() => removeCsvBuilderRow(index)}
-                      className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-500 shadow-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110"
-                      title="Remove Row"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                    </button>
                   )}
                 </div>
               ))}
@@ -1127,7 +1188,6 @@ export default function Home() {
     </div>
   );
 }
-
 
 
 
