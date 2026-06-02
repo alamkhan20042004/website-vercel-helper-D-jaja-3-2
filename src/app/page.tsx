@@ -63,7 +63,7 @@ export default function Home() {
       quality: "110KBps (Balanced 480p)", 
       duration: "None", 
       startTime: "", 
-      isExpanded: true 
+      isExpanded: true // Fresh row always opens expanded
     }] as CsvRow[],
     showBulk: false,
     bulkText: ""
@@ -191,7 +191,12 @@ export default function Home() {
     setCsvBuilder({ ...csvBuilder, rows: newRows });
   };
 
-  const handleCsvBuilderRowChange = (index: number, field: keyof CsvRow, value: string) => {
+  // ⚡ VERCEL TYPE FIX APPLIED HERE
+  const handleCsvBuilderRowChange = (
+    index: number, 
+    field: "channel" | "urls" | "server" | "quality" | "duration" | "startTime", 
+    value: string
+  ) => {
     const newRows = [...csvBuilder.rows];
     newRows[index][field] = value;
     setCsvBuilder({ ...csvBuilder, rows: newRows });
@@ -1188,6 +1193,10 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+
 
 
 
