@@ -10,6 +10,7 @@ export default function Home() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Normal Add/Edit Server Modal
   const [serverModal, setServerModal] = useState({
     isOpen: false,
     mode: "add",
@@ -23,6 +24,7 @@ export default function Home() {
     bulkTime: "" 
   });
 
+  // Basic CSV Export Modal (From Existing Data)
   const [csvModal, setCsvModal] = useState({
     isOpen: false,
     channel: null as Channel | null,
@@ -32,15 +34,17 @@ export default function Home() {
     duration: ""
   });
 
-  // ⚡ NAYA STATE: Advanced CSV Maker ke liye
-  const [advancedCsvModal, setAdvancedCsvModal] = useState({
+  // ⚡ NAYA: Dedicated CSV Record Builder Modal (Add Servers UI jaisa)
+  const [csvBuilder, setCsvBuilder] = useState({
     isOpen: false,
-    rawText: "",
-    baseChannel: "5",
+    baseChannel: "1",
     quality: "110KBps (Balanced 480p)",
     server: "None",
-    startTime: "",
-    duration: "None"
+    duration: "None",
+    masterTime: "",
+    rows: [{ urls: "", startTime: "" }],
+    showBulk: false,
+    bulkText: ""
   });
 
   useEffect(() => {
@@ -127,24 +131,40 @@ export default function Home() {
       });
   };
 
-  // ⚡ NAYA FUNCTION: Advanced CSV Generator
-  const handleAdvancedCsvCopy = () => {
-    if (!advancedCsvModal.rawText.trim()) {
-      alert("Please paste some raw URLs first!");
-      return;
-    }
+  // ====================================================================
+  // ⚡ CSV BUILDER FUNCTIONS (Naya System)
+  // ====================================================================
+  const handleCsvBuilderRowChange = (index: number, field: "urls" | "startTime", value: string) => {
+    const newRows = [...csvBuilder.rows];
+    newRows[index][field] = value;
+    setCsvBuilder({ ...csvBuilder, rows: newRows });
+  };
 
-    let csvData = "TargetURL,Channel,Quality,Server,StartTime,Duration\n";
-    const lines = advancedCsvModal.rawText.split('\n').filter(l => l.trim() !== '');
-
-    lines.forEach((line, index) => {
-      // Smart Bypass: Agar user ne already comma-separated proper dummy data diya hai
-      if (line.includes(',') && (line.includes('KBps') || line.includes('None'))) {
-        csvData += line + '\n';
-        return;
+  const formatUrlsOnBlur = (index: number) => {
+    const currentUrls = csvBuilder.rows[index].urls.trim();
+    if (currentUrls && !currentUrls.includes('|') && (currentUrls.includes(' ') || currentUrls.includes(','))) {
+      const extracted = currentUrls.match(/https?:\/\/[^\s,]+/g);
+      if (extracted) {
+        handleCsvBuilderRowChange(index, "urls", extracted.join(' | '));
       }
+    }
+  };
 
-      // Auto-Formatting Raw URLs to Pipe (|) format
+  const addCsvBuilderRow = () => {
+    setCsvBuilder({ ...csvBuilder, rows: [...csvBuilder.rows, { urls: "", startTime: "" }] });
+  };
+
+  const removeCsvBuilderRow = (index: number) => {
+    const newRows = csvBuilder.rows.filter((_, i) => i !== index);
+    setCsvBuilder({ ...csvBuilder, rows: newRows });
+  };
+
+  const processCsvBulkImport = () => {
+    const text = csvBuilder.bulkText;
+    if (!text.trim()) return;
+
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    const newRows = lines.map(line => {
       let formattedUrls = line.trim();
       if (formattedUrls.includes('http') && !formattedUrls.includes('|')) {
         const extracted = formattedUrls.match(/https?:\/\/[^\s,]+/g);
@@ -152,26 +172,53 @@ export default function Home() {
           formattedUrls = extracted.join(' | ');
         }
       }
+      return {
+        urls: formattedUrls,
+        startTime: csvBuilder.masterTime || ""
+      };
+    });
 
-      const channelNum = `${advancedCsvModal.baseChannel}.${index + 1}`;
-      const timeStr = advancedCsvModal.startTime.trim() ? formatDateTimeForCSV(advancedCsvModal.startTime) : "None";
-      const dur = advancedCsvModal.duration.trim() || "None";
-      const qual = advancedCsvModal.quality.trim() || "110KBps (Balanced 480p)";
-      const srv = advancedCsvModal.server.trim() || "None";
+    const currentValid = csvBuilder.rows.filter(r => r.urls.trim());
+    setCsvBuilder({
+      ...csvBuilder,
+      rows: [...currentValid, ...newRows],
+      showBulk: false,
+      bulkText: ""
+    });
+  };
 
-      csvData += `${formattedUrls},${channelNum},${qual},${srv},${timeStr},${dur}\n`;
+  const generateAndCopyCsvBuilder = () => {
+    const validRows = csvBuilder.rows.filter(r => r.urls.trim());
+    if (validRows.length === 0) {
+      alert("Please add at least one row with URLs!");
+      return;
+    }
+
+    let csvData = "TargetURL,Channel,Quality,Server,StartTime,Duration\n";
+    const dur = csvBuilder.duration.trim() || "None";
+    const qual = csvBuilder.quality.trim() || "110KBps (Balanced 480p)";
+    const srv = csvBuilder.server.trim() || "None";
+    const baseCh = csvBuilder.baseChannel.trim() || "1";
+
+    validRows.forEach((row, index) => {
+      const channelNum = `${baseCh}.${index + 1}`;
+      const rawTimeToUse = row.startTime || csvBuilder.masterTime || "None";
+      const finalStartTime = rawTimeToUse !== "None" ? formatDateTimeForCSV(rawTimeToUse) : "None";
+
+      csvData += `${row.urls},${channelNum},${qual},${srv},${finalStartTime},${dur}\n`;
     });
 
     navigator.clipboard.writeText(csvData)
       .then(() => {
-        alert("✅ Advanced CSV Data Copied to Clipboard!");
-        setAdvancedCsvModal({ ...advancedCsvModal, isOpen: false });
+        alert("✅ CSV Records Copied to Clipboard!");
+        setCsvBuilder({ ...csvBuilder, isOpen: false });
       })
       .catch((err) => {
         console.error("Failed to copy text: ", err);
         alert("Copy karne mein masla pesh aaya.");
       });
   };
+  // ====================================================================
 
   const addCategory = (websiteId: string) => {
     const name = window.prompt("Enter new category name (e.g., Baseball):");
@@ -385,14 +432,14 @@ export default function Home() {
           <p className="mt-4 text-gray-400 text-lg">Select a channel to view available servers.</p>
         </div>
         
-        <div className="flex gap-3 items-center">
-          {/* ⚡ NAYA BUTTON: Advanced CSV Maker */}
+        <div className="flex flex-wrap gap-3 items-center justify-center">
+          {/* ⚡ NAYA BUTTON: Add Records CSV Builder */}
           <button
-            onClick={() => setAdvancedCsvModal({ ...advancedCsvModal, isOpen: true })}
-            className="px-6 py-3 rounded-full font-bold transition-all bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-900/30 flex items-center gap-2"
+            onClick={() => setCsvBuilder({ ...csvBuilder, isOpen: true })}
+            className="px-6 py-3 rounded-full font-bold transition-all bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-900/30 flex items-center gap-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
-            Advanced CSV
+            Add Records (CSV)
           </button>
 
           <button
@@ -525,7 +572,7 @@ export default function Home() {
         ))}
       </main>
 
-      {/* CSV EXPORT MODAL */}
+      {/* BASIC CSV EXPORT MODAL */}
       {csvModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-gray-900 p-6 md:p-8 rounded-2xl border border-gray-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
@@ -579,85 +626,155 @@ export default function Home() {
         </div>
       )}
 
-      {/* ⚡ NAYA MODAL: ADVANCED CSV MAKER */}
-      {advancedCsvModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0a0a0a]/95 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex-1 w-full h-full max-w-5xl mx-auto flex flex-col p-4 md:p-8">
+      {/* ⚡ NAYA MODAL: DEDICATED CSV RECORD BUILDER (Add Servers jaisa) */}
+      {csvBuilder.isOpen && (
+        <div className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          
+          <div className="flex-1 w-full h-full max-w-7xl mx-auto flex flex-col p-4 md:p-8">
+            
             <div className="flex justify-between items-center mb-6 shrink-0 border-b border-gray-800 pb-4">
-              <div>
-                <h3 className="text-3xl font-bold text-white flex items-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8 text-emerald-500"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
-                  Advanced CSV Maker
-                </h3>
-                <p className="text-gray-400 mt-2">Create stream.csv ready data directly from raw URLs</p>
+              <h3 className="text-3xl font-bold text-white flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8 text-indigo-500"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                Create CSV Records
+              </h3>
+              
+              <div className="flex gap-4">
+                <button onClick={() => setCsvBuilder({ ...csvBuilder, showBulk: !csvBuilder.showBulk })} className="bg-indigo-600/30 text-indigo-400 border border-indigo-500/50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-600/50 transition-colors flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                  {csvBuilder.showBulk ? "Close Auto Import" : "Auto Bulk Import"}
+                </button>
+                <button onClick={() => setCsvBuilder({ ...csvBuilder, isOpen: false })} className="text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 p-2 rounded-lg border border-gray-800 transition-colors">
+                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              <button onClick={() => setAdvancedCsvModal({ ...advancedCsvModal, isOpen: false })} className="text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 p-2 rounded-lg border border-gray-800 transition-colors">
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-              </button>
             </div>
 
-            <div className="flex-1 flex flex-col gap-6 overflow-hidden">
-              <div className="bg-gray-900/50 p-5 rounded-2xl border border-gray-800 flex flex-col h-full">
-                <label className="block text-sm font-medium text-emerald-400 mb-2">
-                  Paste Raw URLs here (One Channel per line)
-                </label>
-                <textarea
-                  className="w-full h-full min-h-[200px] bg-gray-950 text-gray-300 p-4 rounded-xl border border-gray-700 focus:border-emerald-500 outline-none resize-none font-mono text-sm custom-scrollbar"
-                  placeholder={`https://stream1.com https://stream2.com\nhttps://stream3.com | https://stream4.com\nOR paste complete CSV lines here...`}
-                  value={advancedCsvModal.rawText}
-                  onChange={(e) => setAdvancedCsvModal({ ...advancedCsvModal, rawText: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Base Channel No.</label>
+            <div className="shrink-0 mb-6 flex flex-col gap-4">
+              <div className="bg-gray-900 p-5 rounded-2xl border border-gray-800 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Base Channel (e.g., 1 or s1)</label>
                   <input
                     type="text"
-                    value={advancedCsvModal.baseChannel}
-                    onChange={(e) => setAdvancedCsvModal({...advancedCsvModal, baseChannel: e.target.value})}
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none text-sm"
+                    value={csvBuilder.baseChannel}
+                    onChange={(e) => setCsvBuilder({...csvBuilder, baseChannel: e.target.value})}
+                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
                   />
                 </div>
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Quality</label>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Target Server (Default: None)</label>
                   <input
                     type="text"
-                    value={advancedCsvModal.quality}
-                    onChange={(e) => setAdvancedCsvModal({...advancedCsvModal, quality: e.target.value})}
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none text-sm"
+                    value={csvBuilder.server}
+                    onChange={(e) => setCsvBuilder({...csvBuilder, server: e.target.value})}
+                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
                   />
                 </div>
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Start Time (Optional)</label>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Speed / Quality</label>
+                  <input
+                    type="text"
+                    value={csvBuilder.quality}
+                    onChange={(e) => setCsvBuilder({...csvBuilder, quality: e.target.value})}
+                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Duration (e.g., 4h)</label>
+                  <input
+                    type="text"
+                    value={csvBuilder.duration}
+                    onChange={(e) => setCsvBuilder({...csvBuilder, duration: e.target.value})}
+                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-indigo-400 mb-2">⏱️ Master Start Time</label>
                   <input
                     type="datetime-local"
-                    value={advancedCsvModal.startTime}
-                    onChange={(e) => setAdvancedCsvModal({...advancedCsvModal, startTime: e.target.value})}
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none text-sm [color-scheme:dark]"
-                  />
-                </div>
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-800">
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Duration (Optional)</label>
-                  <input
-                    type="text"
-                    value={advancedCsvModal.duration}
-                    onChange={(e) => setAdvancedCsvModal({...advancedCsvModal, duration: e.target.value})}
-                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-gray-700 focus:border-emerald-500 outline-none text-sm"
+                    value={csvBuilder.masterTime}
+                    onChange={(e) => setCsvBuilder({...csvBuilder, masterTime: e.target.value})}
+                    className="w-full bg-[#0a0a0a] text-white p-2.5 rounded-lg border border-indigo-500/50 focus:border-indigo-500 outline-none text-sm [color-scheme:dark]"
                   />
                 </div>
               </div>
+
+              {csvBuilder.showBulk && (
+                <div className="bg-indigo-900/10 p-5 rounded-2xl border border-indigo-900/30">
+                  <label className="block text-sm font-medium text-indigo-300 mb-2">Paste Links (New line = New Channel, Space/Comma = Auto Pipe | format)</label>
+                  <textarea
+                    className="w-full bg-gray-950 text-gray-300 p-4 rounded-xl border border-indigo-900/50 focus:border-indigo-500 outline-none resize-none h-24 text-sm font-mono"
+                    placeholder="https://link1.com https://link2.com&#10;https://link3.com | https://link4.com"
+                    value={csvBuilder.bulkText}
+                    onChange={(e) => setCsvBuilder({ ...csvBuilder, bulkText: e.target.value })}
+                  />
+                  <button onClick={processCsvBulkImport} className="mt-4 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors text-base shadow-lg shadow-indigo-900/20">
+                    Extract Links & Auto-Fill Rows
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* ⚡ Scrolling Area Restored Property */}
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-6 space-y-4 custom-scrollbar">
+              {csvBuilder.rows.map((row, index) => (
+                <div key={index} className="flex flex-col md:flex-row gap-4 bg-gray-900 p-5 rounded-2xl border border-gray-800 relative group items-start hover:border-gray-700 transition-colors">
+                  
+                  <div className="flex-1 w-full md:w-[70%]">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      <span className="text-indigo-400 font-bold mr-2 text-lg">Ch {csvBuilder.baseChannel}.{index + 1}</span> 
+                      Target URLs <span className="text-xs font-normal text-gray-500 ml-2">(Auto-formats with | if spaced)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., https://link1.com | https://link2.com"
+                      value={row.urls}
+                      onChange={(e) => handleCsvBuilderRowChange(index, "urls", e.target.value)}
+                      onBlur={() => formatUrlsOnBlur(index)}
+                      className="w-full bg-[#0a0a0a] text-white p-3.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none transition-colors font-mono text-sm"
+                      autoFocus={index === 0 && !csvBuilder.showBulk}
+                    />
+                  </div>
+                  <div className="flex-none w-full md:w-[30%]">
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Override Time (Optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={row.startTime}
+                      onChange={(e) => handleCsvBuilderRowChange(index, "startTime", e.target.value)}
+                      className="w-full bg-[#0a0a0a] text-white p-3.5 rounded-xl border border-gray-700 focus:border-indigo-500 outline-none [color-scheme:dark] transition-colors"
+                    />
+                  </div>
+                  
+                  {csvBuilder.rows.length > 1 && (
+                    <button 
+                      onClick={() => removeCsvBuilderRow(index)}
+                      className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-2 hover:bg-red-500 shadow-xl transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110"
+                      title="Remove Row"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <div className="pt-6 mt-6 border-t border-gray-800 flex justify-end gap-4 shrink-0">
-              <button onClick={() => setAdvancedCsvModal({ ...advancedCsvModal, isOpen: false })} className="px-6 py-3 bg-gray-900 hover:bg-gray-800 rounded-xl text-gray-300 font-medium transition-colors border border-gray-800 text-lg">
-                Cancel
-              </button>
-              <button onClick={handleAdvancedCsvCopy} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white font-bold transition-all shadow-lg shadow-emerald-900/30 text-lg flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 mr-2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" /></svg>
-                Generate & Copy CSV
-              </button>
+            <div className="pt-6 mt-2 border-t border-gray-800 flex justify-between items-center shrink-0 bg-[#0a0a0a]">
+              <div>
+                <button onClick={addCsvBuilderRow} className="px-5 py-3.5 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 font-medium transition-colors flex items-center text-base">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 mr-2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                  Add Empty Row
+                </button>
+              </div>
+              <div className="flex gap-4">
+                <button onClick={() => setCsvBuilder({ ...csvBuilder, isOpen: false })} className="px-8 py-3.5 bg-gray-900 hover:bg-gray-800 rounded-xl text-white font-medium transition-colors text-lg border border-gray-800">
+                  Cancel
+                </button>
+                <button onClick={generateAndCopyCsvBuilder} className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white font-medium transition-all text-lg shadow-lg shadow-indigo-900/30 hover:shadow-indigo-900/50 hover:-translate-y-0.5 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" /></svg>
+                  Generate & Copy CSV
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
       )}
@@ -832,7 +949,6 @@ export default function Home() {
     </div>
   );
 }
-
 
 
 
