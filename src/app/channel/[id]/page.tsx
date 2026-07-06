@@ -355,7 +355,7 @@ export default async function ChannelPage({
 }) {
   const { id } = await params;
 
-  // Database se direct link nikalein (Proxy ki zaroorat nahi)
+  // Database se direct link nikalein
   const serverUrl = await getServerUrlById(id);
   const streamUrl = serverUrl || `https://example.com/stream/${id}`;
   const title = `Sports Player - ${id}`;
@@ -366,22 +366,16 @@ export default async function ChannelPage({
         title={title}
         src={streamUrl}
         
-        // 1. ANTI-BLOCKING TRICK (Strict Referrer Bypass)
-        referrerPolicy="no-referrer" 
+        // YEH WALI LINE CHANGE KI HAI
+        // Ab yeh server ko origin bhejay ga, taakey "TAKE WITH EMBED URL" ka error na aaye
+        referrerPolicy="origin-when-cross-origin" 
         
-        // 2. SMOOTH PLAYBACK & FEATURES
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
-        
-        // 3. FULLSCREEN SUPPORT (React/Next.js Syntax)
         allowFullScreen={true}
-        
-        // 4. UI CLEAUP
         marginHeight={0}
         marginWidth={0}
         scrolling="no"
         frameBorder="0"
-        
-        // 5. TAILWIND FOR PERFECT FIT
         className="w-full h-full border-none block m-0 p-0 bg-black"
       />
     </div>
